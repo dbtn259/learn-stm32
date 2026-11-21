@@ -600,6 +600,14 @@ function renderRef() {
   const rows = (arr) => arr.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('');
   const hdr = side => BOARD.filter(p => p.side === side).map((p, i) => [i + 1, `<b>${p.lab}</b>`, p.kind === 'io' ? p.id : p.kind === 'pwr' ? '전원' : p.kind === 'gnd' ? '접지' : p.id === 'NRST' ? '리셋' : 'VBAT', AF[p.id] || '']);
   $('#refBody').innerHTML = `
+  <div class="card"><h3>처음 사용하는 법</h3>
+  <ol class="howto"><li><b>홈</b>에서 3D 보드를 돌려 보고, 동그란 라벨을 눌러 각 부품 설명을 읽어요.</li>
+  <li><b>레슨</b> 탭에서 레슨을 고르고 맨 위 <b>목표</b>를 확인해요.</li>
+  <li><b>핀맵</b> 탭을 보며 금색 핀 두 개를 차례로 눌러 점퍼선을 꽂아요. 막히면 <b>배선 힌트</b>.</li>
+  <li><b>실행</b>을 누르고 3D 부품과 <b>시리얼 모니터</b>를 확인해요. 목표를 달성하면 완료!</li>
+  <li><b>예제</b> 탭에서 코드를 고쳐 다시 실행해보고, 막히면 <b>예제로 되돌리기</b>.</li>
+  <li>배운 걸 섞어 보고 싶으면 <b>자유 실습</b>에서 부품을 직접 꺼내 만들어요.</li></ol>
+  <div class="edbar"><button class="btn primary" data-tour="home">홈 둘러보기 안내</button><button class="btn" data-tour="lesson">작업대 사용법 안내</button></div></div>
   <div class="card"><h3>조작법</h3><table><tbody>${rows([['이동', '왼쪽 드래그 · W A S D'], ['회전', '오른쪽 드래그 · Q / E · 아래 툴바 ↺ ↻'], ['확대', '마우스 휠 · R / F · 툴바 − +'], ['시점 초기화', '툴바 나침반'], ['배선', '핀을 누르고 다른 핀을 누르기 · 선을 누르면 제거 · Esc 취소'], ['부품', '몸체를 끌어 이동 · 노브·바퀴·블록은 끌어서 조절'], ['실행', '실행 버튼 · Ctrl+Enter'], ['모바일', '한 손가락 이동 · 두 손가락 확대·회전']])}</tbody></table></div>
   <div class="card"><h3>Black Pill 핀맵 — USB 쪽 줄 (B12 → 3.3)</h3><table class="stack"><thead><tr><th>#</th><th>표기</th><th>핀</th><th>주요 기능</th></tr></thead><tbody>${rows(hdr('N'))}</tbody></table></div>
   <div class="card"><h3>Black Pill 핀맵 — 반대쪽 줄 (5V → VB)</h3><table class="stack"><thead><tr><th>#</th><th>표기</th><th>핀</th><th>주요 기능</th></tr></thead><tbody>${rows(hdr('F'))}</tbody></table></div>
@@ -620,6 +628,7 @@ function renderSettings() {
   $('#setBody').innerHTML = `
   <div class="setrow"><div><b>소리</b><small>부저·ESC 소리를 스피커로 내요</small></div>${sw('sound', store.sound)}</div>
   <div class="setrow"><div><b>고화질 그래픽</b><small>그림자·해상도를 높여요. 느리면 끄세요</small></div>${sw('hq', store.hq !== false)}</div>
+  <div class="setrow"><div><b>사용법 안내 다시 보기</b><small>홈과 작업대 사용법을 단계별로 안내해요</small></div><button class="btn sm" data-tour="home">홈</button><button class="btn sm" data-tour="lesson">작업대</button></div>
   <div class="setrow"><div><b>진행 기록 지우기</b><small>완료한 레슨 표시를 모두 지워요</small></div><button class="btn sm" data-act="resetDone">지우기</button></div>
   <div class="setrow"><div><b>코드·배선 초기화</b><small>고친 코드, 꽂은 선, 옮긴 부품을 처음으로 돌려요</small></div><button class="btn sm" data-act="resetWork">초기화</button></div>`;
 }
@@ -647,15 +656,16 @@ function route() {
   const view = lesson ? 'lesson' : ['home', 'lessons', 'parts', 'ref', 'settings'].includes(h) ? h : 'home';
   if (curView === 'lesson' && (view !== 'lesson' || lesson !== cur)) stop(true);
   curView = view;
+  if (tour) { tour = null; tourEl.hidden = true; }
   document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== 'v-' + view);
   document.querySelectorAll('.tabbar a').forEach(a => a.setAttribute('aria-current', a.dataset.nav === (view === 'lesson' ? 'lessons' : view) ? 'page' : 'false'));
   if (VIEWERS[view]) { $(VIEWERS[view]).append(stage); scene.mount(stage); }
   if (view === 'home') {
     comps = []; wires = []; TERMS.clear(); for (const p of BOARD_PINS) TERMS.add('B:' + p.id); rebuildNets();
     scene.setBoard(true); scene.setComps([], false); scene.setWires([], wireColor); scene.setHotspots(true); scene.view('home');
-    document.title = 'Learn STM32';
+    document.title = 'Learn STM32'; maybeTour('home');
   } else if (view === 'parts') { renderParts(); showPartScene(); document.title = '부품 · Learn STM32'; }
-  else if (view === 'lesson') openLesson(lesson);
+  else if (view === 'lesson') { openLesson(lesson); maybeTour('lesson'); }
   else if (view === 'ref') { renderRef(); document.title = '참고 · Learn STM32'; }
   else if (view === 'settings') { renderSettings(); document.title = '설정 · Learn STM32'; }
   else document.title = '레슨 · Learn STM32';
@@ -667,6 +677,76 @@ document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => {
   if (k === 'rl') scene.rotate(1); else if (k === 'rr') scene.rotate(-1); else if (k === 'zi') scene.zoom(.75); else if (k === 'zo') scene.zoom(1.33);
   else scene.view(curView === 'home' ? 'home' : 'all');
 });
+
+/* ---------- 사용법 튜토리얼(단계별 안내) ---------- */
+const TOURS = {
+  home: [
+    { sel: '.hero', t: 'Learn STM32에 오신 걸 환영해요', p: 'STM32F411 Black Pill 보드를 3D로 살펴보고, 부품을 배선하고, HAL C 코드를 실행해보는 실습 사이트예요. 1분이면 사용법을 익힐 수 있어요.' },
+    { sel: '#homeViewer', t: '3D 보드 살펴보기', p: '왼쪽 드래그로 이동, 오른쪽 드래그나 Q·E로 회전, 휠로 확대해요. 휴대폰은 한 손가락 이동, 두 손가락 확대·회전이에요.' },
+    { sel: '#homeViewer .hs', t: '부품 설명 라벨', p: '보드 위 동그란 라벨을 누르면 그 부품이 무엇이고 어떻게 쓰는지 아래에 설명이 나와요.', fallback: '#homeViewer' },
+    { sel: '#stage .vtools', t: '시점 툴바', p: '↺ ↻ 회전, − + 확대, 나침반은 처음 시점으로 돌아가요.' },
+    { sel: '.stat', t: '진행률', p: '완료한 레슨 수와 지금 배우는 단원이 표시돼요. 기록은 이 브라우저에 저장돼요.' },
+    { sel: '#nextCard', t: '레슨 시작', p: '시작을 누르면 다음에 할 레슨이 열려요. 레슨에 들어가면 작업대 사용법을 이어서 안내해요.' },
+    { sel: '.tabbar', t: '메뉴', p: '레슨 목록, 부품 15종 3D 보기, 핀맵·HAL 함수 참고, 설정으로 이동해요. 이 안내는 참고 탭에서 다시 볼 수 있어요.' }
+  ],
+  lesson: [
+    { sel: '#goal', t: '레슨 목표', p: '이 조건을 실행 중에 달성하면 레슨이 완료돼요.' },
+    { sel: '#lessonViewer', t: '작업대와 배선', p: '금색 핀을 누른 뒤 연결할 다른 핀을 누르면 점퍼선이 꽂혀요. 선을 누르면 뽑히고, Esc로 선택을 취소해요. 부품 몸체는 끌어서 옮길 수 있어요.' },
+    { sel: '.wirebar', t: '실행과 배선 도움', p: '실행을 누르면 예제 코드가 돌아가요. 배선 힌트는 다음에 꽂을 두 핀을 빨갛게 표시하고, 전선 지우기는 모든 선을 뽑아요.' },
+    { sel: '.lside .tabs', t: '설명·핀맵·예제·사양', p: '개요에서 개념을 읽고, 핀맵에서 어디에 꽂을지 확인하세요. 예제 탭에서 코드를 직접 고치고 Ctrl+Enter로 실행할 수 있어요.' },
+    { sel: '.serial', t: '시리얼 모니터', p: 'printf 출력과 경고·오류가 여기에 나와요. 플로터 탭은 "이름:값" 형식 출력을 그래프로 그리고, 아래 입력창으로 보드에 문자를 보낼 수 있어요.' },
+    { sel: '#lessonViewer', t: '부품 조작', p: 'KEY·NRST 버튼과 버튼 모듈은 누르고 있으면 눌린 상태가 돼요. 가변저항 노브, 모터 바퀴, 초음파 앞 블록, 온습도 센서는 끌어서 값을 바꿔요.' }
+  ]
+};
+const tourEl = document.createElement('div'); tourEl.className = 'tour'; tourEl.hidden = true;
+tourEl.innerHTML = '<div class="tour-hole"></div><div class="tour-card" role="dialog" aria-live="polite"><small></small><h3></h3><p></p><div class="tour-btns"><button class="btn sm" data-t="skip">건너뛰기</button><span></span><button class="btn sm" data-t="prev">이전</button><button class="btn sm primary" data-t="next">다음</button></div></div>';
+document.body.append(tourEl);
+let tour = null;
+function startTour(name) {
+  if (!TOURS[name]) return;
+  tour = { name, i: 0 }; tourEl.hidden = false; showStep();
+}
+function endTour(done) {
+  if (!tour) return;
+  (store.tours = store.tours || {})[tour.name] = true; save();
+  tour = null; tourEl.hidden = true;
+}
+function showStep() {
+  const steps = TOURS[tour.name], s = steps[tour.i];
+  let el = document.querySelector(s.sel);
+  if (!el || !el.offsetParent && el !== document.querySelector('.tabbar')) el = s.fallback ? document.querySelector(s.fallback) : null;
+  if (!el) { tour.i < steps.length - 1 ? (tour.i++, showStep()) : endTour(true); return; }
+  const r0 = el.getBoundingClientRect();
+  if (r0.top < 0 || r0.bottom > innerHeight - 90) el.scrollIntoView({ block: 'center' });
+  const card = tourEl.querySelector('.tour-card');
+  card.querySelector('small').textContent = `${tour.i + 1} / ${steps.length}`;
+  card.querySelector('h3').textContent = s.t; card.querySelector('p').textContent = s.p;
+  card.querySelector('[data-t=prev]').hidden = tour.i === 0;
+  card.querySelector('[data-t=next]').textContent = tour.i === steps.length - 1 ? '시작하기' : '다음';
+  tour.el = el; requestAnimationFrame(placeTour);
+}
+function placeTour() {
+  if (!tour) return;
+  const r = tour.el.getBoundingClientRect(), pad = 8, hole = tourEl.querySelector('.tour-hole'), card = tourEl.querySelector('.tour-card');
+  Object.assign(hole.style, { left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px' });
+  const cw = Math.min(360, innerWidth - 24), ch = card.offsetHeight;
+  let top = r.bottom + 16; if (top + ch > innerHeight - 12) top = r.top - ch - 16; if (top < 12) top = Math.max(12, innerHeight - ch - 100);
+  const left = Math.min(Math.max(12, r.left + r.width / 2 - cw / 2), innerWidth - cw - 12);
+  Object.assign(card.style, { width: cw + 'px', left: left + 'px', top: top + 'px' });
+}
+tourEl.addEventListener('click', e => {
+  const b = e.target.closest('[data-t]'); if (!b || !tour) return;
+  const n = TOURS[tour.name].length;
+  if (b.dataset.t === 'skip') return endTour(false);
+  if (b.dataset.t === 'prev') tour.i = Math.max(0, tour.i - 1);
+  else { if (tour.i >= n - 1) return endTour(true); tour.i++; }
+  showStep();
+});
+addEventListener('resize', () => tour && placeTour());
+addEventListener('scroll', () => tour && placeTour(), { passive: true });
+document.addEventListener('keydown', e => { if (!tour) return; if (e.key === 'Escape') endTour(false); if (e.key === 'ArrowRight' || e.key === 'Enter') tourEl.querySelector('[data-t=next]').click(); if (e.key === 'ArrowLeft') tourEl.querySelector('[data-t=prev]').click(); }, true);
+const maybeTour = name => { if (!(store.tours || {})[name] && !tour) setTimeout(() => { if (!tour && curView === (name === 'lesson' ? 'lesson' : 'home')) startTour(name); }, 900); };
+document.addEventListener('click', e => { const b = e.target.closest('[data-tour]'); if (!b) return; e.preventDefault(); const name = b.dataset.tour; if (name === 'lesson' && curView !== 'lesson') { location.hash = LESSONS[1].id; setTimeout(() => startTour('lesson'), 900); } else if (name === 'home' && curView !== 'home') { location.hash = 'home'; setTimeout(() => startTour('home'), 900); } else startTour(name); });
 
 /* ---------- 시계 ---------- */
 function tickClock() {
