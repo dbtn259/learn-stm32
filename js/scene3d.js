@@ -4,20 +4,17 @@ import { OrbitControls } from '../vendor/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from '../vendor/CSS2DRenderer.js';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
 
-/* ---------- 보드 핀 배치 (mm, 보드 중심 기준, +z = 사용자 쪽) ---------- */
-const AX = 24.13, P = 2.54;
-const R1 = ['PB8:D15', 'PB9:D14', 'AREF:AREF', 'GND3:GND', 'PA5:D13', 'PA6:D12', 'PA7:D11', 'PB6:D10', 'PC7:D9', 'PA9:D8'];
-const R2 = ['PA8:D7', 'PB10:D6', 'PB4:D5', 'PB5:D4', 'PB3:D3', 'PA10:D2', 'PA2:D1', 'PA3:D0'];
-const L1 = ['NC:NC', 'IOREF:IOREF', 'RESET:RESET', '3V3:3V3', '5V:5V', 'GND1:GND', 'GND2:GND', 'VIN:VIN'];
-const L2 = ['PA0:A0', 'PA1:A1', 'PA4:A2', 'PB0:A3', 'PC1:A4', 'PC0:A5'];
-const KIND = { '3V3': 'pwr', '5V': 'pwr', GND1: 'gnd', GND2: 'gnd', GND3: 'gnd', VIN: 'nc', NC: 'nc', IOREF: 'nc', RESET: 'nc', AREF: 'nc' };
+/* ---------- Black Pill STM32F411CEU6 핀 배치 (mm, 보드 중심, USB-C는 -x 쪽) ---------- */
+const P = 2.54, ROWZ = 7.62;
+const NEAR = ['PB12:B12', 'PB13:B13', 'PB14:B14', 'PB15:B15', 'PA8:A8', 'PA9:A9', 'PA10:A10', 'PA11:A11', 'PA12:A12', 'PA15:A15', 'PB3:B3', 'PB4:B4', 'PB5:B5', 'PB6:B6', 'PB7:B7', 'PB8:B8', 'PB9:B9', '5V_2:5V', 'GND2:G', '3V3_2:3.3'];
+const FAR = ['5V:5V', 'GND1:G', '3V3:3.3', 'PB10:B10', 'PB2:B2', 'PB1:B1', 'PB0:B0', 'PA7:A7', 'PA6:A6', 'PA5:A5', 'PA4:A4', 'PA3:A3', 'PA2:A2', 'PA1:A1', 'PA0:A0', 'NRST:R', 'PC15:C15', 'PC14:C14', 'PC13:C13', 'VBAT:VB'];
+const KIND = { '5V': 'pwr', '5V_2': 'pwr', '3V3': 'pwr', '3V3_2': 'pwr', GND1: 'gnd', GND2: 'gnd', NRST: 'nc', VBAT: 'nc' };
 export const BOARD = [];
-const addRow = (arr, x, z0, side) => arr.forEach((s, i) => { const [id, lab] = s.split(':'); BOARD.push({ id, lab, x, z: z0 + i * P, side, kind: KIND[id] || 'io' }); });
-addRow(R1, AX, -15.2, 'R'); addRow(R2, AX, -15.2 + 9 * P + P + 1.52, 'R');
-addRow(L1, -AX, -4.9, 'L'); addRow(L2, -AX, -4.9 + 7 * P + P + 2.54, 'L');
+NEAR.forEach((s, i) => { const [id, lab] = s.split(':'); BOARD.push({ id, lab, x: -24.13 + i * P, z: ROWZ, side: 'N', kind: KIND[id] || 'io' }); });
+FAR.forEach((s, i) => { const [id, lab] = s.split(':'); BOARD.push({ id, lab, x: -24.13 + i * P, z: -ROWZ, side: 'F', kind: KIND[id] || 'io' }); });
 
-const BW = 70, BL = 82.5, BY = 9;            // 보드 폭·길이, PCB 아랫면 높이(모르포 핀 위)
-const TOP = BY + 1.6, SOCK = TOP + 8.5;       // PCB 윗면, 소켓 윗면
+const BW = 53.34, BL = 20.83, BY = 3;          // 보드 길이(x)·폭(z), PCB 아랫면 높이
+const TOP = BY + 1.2, PIN_TOP = TOP + 2.5 + 6;  // PCB 윗면, 핀 끝
 
 /* ---------- 유틸 ---------- */
 const M = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: .55, metalness: 0, ...o });
@@ -61,7 +58,7 @@ export function createScene(host, cb) {
   const css = new CSS2DRenderer(); css.domElement.className = 'css2d'; host.append(css.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#3b4650'); scene.fog = new THREE.Fog('#3b4650', 700, 1500);
+  scene.background = new THREE.Color('#1c1713'); scene.fog = new THREE.Fog('#1c1713', 500, 1300);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), .04).texture;
 
@@ -69,7 +66,7 @@ export function createScene(host, cb) {
   camera.position.set(40, 230, 250);
 
   // 조명
-  scene.add(new THREE.HemisphereLight('#ffffff', '#8a939c', .55));
+  scene.add(new THREE.HemisphereLight('#fff3e2', '#3a2e22', .7));
   const sun = new THREE.DirectionalLight('#ffffff', 1.6);
   sun.position.set(-120, 260, 160); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -260, right: 260, top: 260, bottom: -260, near: 10, far: 800 });
@@ -77,100 +74,107 @@ export function createScene(host, cb) {
 
   // 작업 매트
   const matTex = canvasTex(1024, 1024, (g, w) => {
-    g.fillStyle = '#3b4650'; g.fillRect(0, 0, w, w);
-    for (let i = 0; i <= 64; i++) { const p = i * w / 64; g.strokeStyle = i % 5 ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.14)'; g.lineWidth = i % 5 ? 1 : 2; g.beginPath(); g.moveTo(p, 0); g.lineTo(p, w); g.moveTo(0, p); g.lineTo(w, p); g.stroke(); }
+    g.fillStyle = '#2a221b'; g.fillRect(0, 0, w, w);
+    for (let i = 0; i <= 16; i++) { const p = i * w / 16; g.strokeStyle = i % 4 ? 'rgba(232,206,160,.10)' : 'rgba(232,206,160,.28)'; g.lineWidth = i % 4 ? 2 : 3; g.beginPath(); g.moveTo(p, 0); g.lineTo(p, w); g.moveTo(0, p); g.lineTo(w, p); g.stroke(); }
   });
-  matTex.wrapS = matTex.wrapT = THREE.RepeatWrapping; matTex.repeat.set(3.75, 3.75);
+  matTex.wrapS = matTex.wrapT = THREE.RepeatWrapping; matTex.repeat.set(15, 15);
   const ground = mesh(new THREE.PlaneGeometry(2400, 2400), M('#ffffff', { map: matTex, roughness: .9 }), 60, 0, 0, scene);
   ground.rotation.x = -Math.PI / 2; ground.castShadow = false; ground.userData = { kind: 'ground' };
 
   const controls = { enabled: true };
   const orbit = new OrbitControls(camera, renderer.domElement);
-  orbit.target.set(45, 0, 0); orbit.enableDamping = true; orbit.dampingFactor = .12;
-  orbit.maxPolarAngle = Math.PI * .47; orbit.minDistance = 40; orbit.maxDistance = 900;
-  orbit.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+  orbit.target.set(30, 0, 0); orbit.enableDamping = true; orbit.dampingFactor = .12; orbit.screenSpacePanning = false;
+  orbit.maxPolarAngle = Math.PI * .47; orbit.minDistance = 25; orbit.maxDistance = 900;
+  orbit.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+  orbit.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
 
   const pick = [];          // 레이캐스트 대상
   const anchors = new Map(); // 단자 id → Vector3 (꽂히는 지점)
   const termObjs = new Map();
 
-  /* ---------- 보드 ---------- */
+  /* ---------- 보드: Black Pill STM32F411CEU6 ---------- */
   const board = new THREE.Group(); scene.add(board);
-  const pcbTex = canvasTex(1400, 1650, (g, w, h) => {
-    const s = w / BW;
-    g.fillStyle = '#f4f4f0'; g.fillRect(0, 0, w, h);
-    g.strokeStyle = 'rgba(150,160,170,.18)'; g.lineWidth = 3;
-    for (let i = 0; i < 60; i++) { g.beginPath(); let x = Math.random() * w, y = Math.random() * h; g.moveTo(x, y); for (let k = 0; k < 3; k++) { Math.random() < .5 ? x += (Math.random() - .5) * 300 : y += (Math.random() - .5) * 300; g.lineTo(x, y); } g.stroke(); }
-    g.fillStyle = '#5e6670'; g.textAlign = 'center';
-    g.font = `800 ${4.2 * s}px sans-serif`; g.fillText('NUCLEO-F401RE', w / 2, (BL / 2 + 36) * s);
-    g.font = `600 ${2.2 * s}px sans-serif`; g.fillText('ST-LINK/V2-1', w / 2 - 9 * s, 9 * s);
-    g.fillText('MB1136', w / 2 + 14 * s, (BL / 2 + 31) * s);
-    g.setLineDash([.6 * s, .7 * s]); g.strokeStyle = '#9aa3ab'; g.lineWidth = .5 * s; g.beginPath(); g.moveTo(0, 23 * s); g.lineTo(w, 23 * s); g.stroke(); g.setLineDash([]);
-    g.font = `600 ${1.7 * s}px sans-serif`;
-    [['CN6', -AX, -8], ['CN8', -AX, 17.5], ['CN5', AX, -18.3], ['CN9', AX, 10.7], ['CN7', -30.5, -20], ['CN10', 30.5, -20]].forEach(([t, x, z]) => g.fillText(t, (x + BW / 2) * s, (z + BL / 2) * s));
-    [['B1 USER', -13, -9.5], ['B2 RESET', 13, -9.5], ['LD2', 15.6, -3.3], ['LD1', -5, -26], ['LD3', 6, -26]].forEach(([t, x, z]) => g.fillText(t, (x + BW / 2) * s, (z + BL / 2) * s));
+  const TS = 40, TX = x => (x + BW / 2) * TS, TZ = z => (z + BL / 2) * TS;
+  const pcbTex = canvasTex(Math.round(BW * TS), Math.round(BL * TS), (g, w, h) => {
+    g.fillStyle = '#16181b'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(255,255,255,.045)'; g.lineWidth = 7;
+    for (let i = 0; i < 40; i++) { g.beginPath(); let x = Math.random() * w, y = TZ(-5) + Math.random() * TZ(10) - TZ(-5); g.moveTo(x, y); for (let k = 0; k < 3; k++) { Math.random() < .5 ? x += (Math.random() - .5) * 500 : y += (Math.random() - .5) * 200; g.lineTo(x, y); } g.stroke(); }
+    g.fillStyle = '#ecebe6'; g.strokeStyle = '#ecebe6'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `700 ${1.05 * TS}px "JetBrains Mono", "DejaVu Sans Mono", monospace`;
+    for (const p of BOARD) { g.save(); g.translate(TX(p.x), TZ(p.side === 'N' ? p.z - 2.35 : p.z + 2.35)); g.rotate(-Math.PI / 2); g.fillText(p.lab, 0, 0); g.restore(); }
+    g.lineWidth = .16 * TS; for (const z of [ROWZ, -ROWZ]) g.strokeRect(TX(-25.4), TZ(z - 1.27), 50.8 * TS, 2.54 * TS);
+    g.font = `800 ${1.5 * TS}px sans-serif`; g.fillText('STM32F411', TX(15), TZ(-3.1));
+    g.font = `600 ${1 * TS}px sans-serif`; g.fillText('100MHz · 512KB', TX(15), TZ(-.9)); g.fillText('CORE BOARD', TX(15), TZ(3.6));
+    g.font = `700 ${.85 * TS}px sans-serif`;
+    [['BOOT0', -16.5, 5.2], ['NRST', -16.5, -5.2], ['KEY', -10.5, 5.2], ['PWR', -11, -5.4], ['C13', -8.1, -5.4], ['25M', -4.5, 1.9], ['SWD', 22.4, -4.6]].forEach(([t, x, z]) => g.fillText(t, TX(x), TZ(z)));
+    g.font = `700 ${.7 * TS}px sans-serif`;
+    ['3V3', 'DIO', 'CLK', 'GND'].forEach((t, i) => { g.save(); g.translate(TX(21.6), TZ(-3.81 + i * 2.54)); g.fillText(t, 0, 0); g.restore(); });
+    g.fillStyle = '#c9a440'; for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(TX(23.9), TZ(-3.81 + i * 2.54), .75 * TS, 0, Math.PI * 2); g.fill(); g.fillStyle = '#0d0e10'; g.beginPath(); g.arc(TX(23.9), TZ(-3.81 + i * 2.54), .45 * TS, 0, Math.PI * 2); g.fill(); g.fillStyle = '#c9a440'; }
   });
-  const pcbSide = M('#e7e7e2');
-  const pcb = mesh(new THREE.BoxGeometry(BW, 1.6, BL), [pcbSide, pcbSide, M('#ffffff', { map: pcbTex, roughness: .5 }), pcbSide, pcbSide, pcbSide], 0, BY + .8, 0, board);
+  const pcbSide = M('#121315', { roughness: .5 });
+  const pcb = mesh(new THREE.BoxGeometry(BW, 1.2, BL), [pcbSide, pcbSide, M('#ffffff', { map: pcbTex, roughness: .42, metalness: .05 }), pcbSide, pcbSide, pcbSide], 0, BY + .6, 0, board);
   pcb.userData = { kind: 'board' };
-  // 모르포 핀(CN7, CN10): 위·아래로 돋은 수 핀
-  const pinGeo = new THREE.BoxGeometry(.64, 17.5, .64), baseGeo = new THREE.BoxGeometry(2.54, 2.5, 2.54);
-  const morpho = [];
-  for (const sx of [-1, 1]) for (const cx of [29.21, 31.75]) for (let i = 0; i < 19; i++) morpho.push([sx * cx, -20.2 + i * P]);
-  const pins = new THREE.InstancedMesh(pinGeo, MAT.gold, morpho.length), bases = new THREE.InstancedMesh(baseGeo, MAT.plastic, morpho.length);
-  const mtx = new THREE.Matrix4();
-  morpho.forEach(([x, z], i) => { mtx.makeTranslation(x, BY + 1.6 - 4.2, z); pins.setMatrixAt(i, mtx); mtx.makeTranslation(x, TOP + 1.25, z); bases.setMatrixAt(i, mtx); });
-  pins.castShadow = bases.castShadow = true; board.add(pins, bases);
-  // 아두이노 암 헤더
-  const groups = [[R1, AX, -15.2], [R2, AX, -15.2 + 10 * P + 1.52], [L1, -AX, -4.9], [L2, -AX, -4.9 + 8 * P + 2.54]];
-  for (const [arr, x, z0] of groups) {
-    const len = arr.length * P;
-    box(P, 8.5, len, MAT.black, x, TOP, z0 - P / 2 + len / 2, board);
-  }
-  const holeGeo = new THREE.BoxGeometry(1.1, .05, 1.1), holeMat = M('#000000', { roughness: 1 });
-  for (const p of BOARD) mesh(holeGeo, holeMat, p.x, SOCK + .01, p.z, board).castShadow = false;
-  // USB, ST-LINK, 메인 MCU(45° 회전), 버튼, LED, 크리스털, 수동소자
-  const usb = box(7.8, 4, 9.2, MAT.silver, 0, TOP, -BL / 2 + 3.4, board); box(5, 2, 1, MAT.dark, 0, TOP + 1, -BL / 2 - 1.1, board);
-  box(7, 1.4, 7, MAT.chip, 9, TOP, -31, board);
-  box(5, 1, 3, MAT.chip, -14, TOP, -33, board);
-  for (let i = 0; i < 2; i++) { box(2.54, 2.5, 5.08, MAT.plastic, -6 + i * 4, TOP, -36, board); box(2.4, 6, 4.8, MAT.dark, -6 + i * 4, TOP + 2.5, -36, board); }
-  for (let i = 0; i < 6; i++) { box(2.54, 2.5, 2.54, MAT.plastic, 26, TOP, -36 + i * P - 6, board); cyl(.32, 8.5, MAT.gold, 26, TOP, -36 + i * P - 6, board, 6); }
-  const mcu = new THREE.Group(); mcu.position.set(0, TOP, 8); mcu.rotation.y = Math.PI / 4; board.add(mcu);
-  box(10, 1.4, 10, MAT.chip, 0, 0, 0, mcu); cyl(.6, .05, MAT.dark, -3.6, 1.41, -3.6, mcu, 16);
-  const legGeo = new THREE.BoxGeometry(.22, .3, 1.2); const legs = new THREE.InstancedMesh(legGeo, MAT.silver, 64);
-  for (let i = 0; i < 64; i++) {
-    const side = Math.floor(i / 16), k = (i % 16 - 7.5) * .5; const q = new THREE.Object3D();
-    if (side === 0) q.position.set(k, .15, 5.6); else if (side === 1) q.position.set(k, .15, -5.6); else if (side === 2) { q.position.set(5.6, .15, k); q.rotation.y = Math.PI / 2; } else { q.position.set(-5.6, .15, k); q.rotation.y = Math.PI / 2; }
-    q.updateMatrix(); legs.setMatrixAt(i, q.matrix);
-  }
-  mcu.add(legs);
-  const mcuLbl = canvasTex(256, 256, (g) => { g.fillStyle = '#141516'; g.fillRect(0, 0, 256, 256); g.fillStyle = '#c9ced3'; g.font = '700 40px sans-serif'; g.textAlign = 'center'; g.fillText('STM32', 128, 110); g.font = '600 28px monospace'; g.fillText('F401RET6', 128, 150); });
-  mesh(new THREE.PlaneGeometry(9.4, 9.4), M('#ffffff', { map: mcuLbl, roughness: .4 }), 0, 1.41, 0, mcu).rotation.x = -Math.PI / 2;
-  box(11, 1.3, 3.8, MAT.silver, 0, TOP, 24, board);
-  const mkButton = (x, z, col, id) => {
-    box(6, 3.4, 6, MAT.silver, x, TOP, z, board);
-    const cap = cyl(1.9, 1.6, M(col, { roughness: .35 }), x, TOP + 3.4, z, board, 24);
-    cap.userData = { kind: 'press', id }; pick.push(cap); return cap;
+  // 핀 헤더 20×2 (위로 꽂는 수 핀)
+  for (const z of [ROWZ, -ROWZ]) box(50.8, 2.5, 2.54, MAT.plastic, 0, TOP, z, board);
+  const pinH = PIN_TOP, pinGeo = new THREE.BoxGeometry(.64, pinH, .64);
+  const pins = new THREE.InstancedMesh(pinGeo, MAT.gold, BOARD.length); const mtx = new THREE.Matrix4();
+  BOARD.forEach((p, i) => { mtx.makeTranslation(p.x, pinH / 2, p.z); pins.setMatrixAt(i, mtx); });
+  pins.castShadow = true; board.add(pins);
+  // USB-C
+  const usb = new THREE.Group(); usb.position.set(-BW / 2 + 3.2, TOP, 0); board.add(usb);
+  const usbM = M('#cfd4d8', { metalness: 1, roughness: .25 });
+  mesh(new THREE.CapsuleGeometry(1.63, 5.7, 6, 16), usbM, 0, 1.63, 0, usb).rotation.x = Math.PI / 2;
+  box(7.35, 3.26, 5.8, usbM, 0, 0, 0, usb);
+  const hole = box(.2, 1.4, 6.6, MAT.black, -3.7, .9, 0, usb); hole.castShadow = false;
+  // 버튼 3개
+  const btn = (x, z, id, col) => {
+    box(3.5, 1.6, 4.6, MAT.silver, x, TOP, z, board); box(3.9, .4, 5, MAT.black, x, TOP, z, board);
+    const cap = box(1.7, 1, 2.6, M(col, { roughness: .4 }), x, TOP + 1.6, z, board); cap.userData = { kind: 'press', id }; pick.push(cap); return cap;
   };
-  const b1 = mkButton(-13, -13.5, '#2f6ad0', 'B1'), b2 = mkButton(13, -13.5, '#18191b', 'B2');
-  const ld2Mat = M('#bfe8c8', { emissive: '#22ff66', emissiveIntensity: 0, roughness: .3 });
-  box(1.6, .7, .8, ld2Mat, 15.6, TOP, -6, board);
-  const ld2Glow = glowSprite('#38ff7a'); ld2Glow.position.set(15.6, TOP + 1.5, -6); board.add(ld2Glow);
-  const ld3 = box(1.6, .7, .8, M('#ff6b5e', { emissive: '#ff2a1a', emissiveIntensity: 2.2 }), 6, TOP, -29.5, board);
-  const ld3g = glowSprite('#ff4030'); ld3g.position.set(6, TOP + 1, -29.5); ld3g.material.opacity = .55; ld3g.scale.set(7, 7, 1); board.add(ld3g);
-  box(1.6, .7, .8, M('#ff5a4e', { emissive: '#ff2a1a', emissiveIntensity: .8 }), -5, TOP, -29.5, board);
-  const smdGeo = new THREE.BoxGeometry(1.6, .5, .8); const smd = new THREE.InstancedMesh(smdGeo, MAT.beige, 70), smd2 = new THREE.InstancedMesh(smdGeo, MAT.chip, 40);
-  const rnd = (a, b) => a + Math.random() * (b - a);
-  const okPos = (x, z) => Math.abs(x) < 19 && !(Math.abs(x) < 8.5 && Math.abs(z - 8) < 8.5) && !(Math.abs(z + 13.5) < 4.5 && Math.abs(Math.abs(x) - 13) < 4.5) && !(Math.abs(z - 24) < 3);
-  for (const im of [smd, smd2]) for (let i = 0; i < im.count; i++) { let x, z; do { x = rnd(-19, 19); z = rnd(-38, 36); } while (!okPos(x, z)); const q = new THREE.Object3D(); q.position.set(x, TOP + .25, z); q.rotation.y = Math.random() < .5 ? 0 : Math.PI / 2; q.updateMatrix(); im.setMatrixAt(i, q.matrix); }
-  board.add(smd, smd2);
-  // 보드 핀 단자 + 라벨
-  for (const p of BOARD) {
-    if (p.kind === 'nc') continue;
-    addTerm('B:' + p.id, new THREE.Vector3(p.x, SOCK, p.z), board);
-    const txt = p.kind === 'io' ? `${p.lab} ${p.id}` : p.lab;
-    label(txt, 'pin ' + (p.side === 'R' ? 'r' : 'l'), board, p.x + (p.side === 'R' ? -2.4 : 2.4), TOP + .2, p.z);
-  }
+  const caps = { BOOT0: btn(-16.5, 3, 'BOOT0', '#2b2e33'), NRST: btn(-16.5, -3, 'NRST', '#2b2e33'), KEY: btn(-10.5, 3, 'KEY', '#2b2e33') };
+  // LED: PWR(빨강), C13(파랑)
+  box(1, .45, .55, M('#ff7b6e', { emissive: '#ff2a1a', emissiveIntensity: 2.4 }), -11, TOP, -3.6, board);
+  const pwrG = glowSprite('#ff4030'); pwrG.position.set(-11, TOP + .8, -3.6); pwrG.material.opacity = .6; pwrG.scale.set(6, 6, 1); board.add(pwrG);
+  const ldMat = M('#b9d6ff', { emissive: '#3b8cff', emissiveIntensity: 0, roughness: .3 });
+  box(1, .45, .55, ldMat, -8.1, TOP, -3.6, board);
+  const ldGlow = glowSprite('#4f9dff'); ldGlow.position.set(-8.1, TOP + .9, -3.6); board.add(ldGlow);
+  // MCU QFN48 (45° 회전)
+  const mcu = new THREE.Group(); mcu.position.set(3, TOP, 0); mcu.rotation.y = Math.PI / 4; board.add(mcu);
+  box(7, .85, 7, MAT.chip, 0, 0, 0, mcu);
+  const mcuLbl = canvasTex(256, 256, (g) => { g.fillStyle = '#141516'; g.fillRect(0, 0, 256, 256); g.fillStyle = '#b9bec4'; g.textAlign = 'center'; g.font = '800 44px sans-serif'; g.fillText('STM32', 128, 105); g.font = '600 26px monospace'; g.fillText('F411CEU6', 128, 145); g.fillText('ARM', 128, 182); g.beginPath(); g.arc(40, 40, 12, 0, Math.PI * 2); g.fill(); });
+  mesh(new THREE.PlaneGeometry(6.8, 6.8), M('#ffffff', { map: mcuLbl, roughness: .45 }), 0, .86, 0, mcu).rotation.x = -Math.PI / 2;
+  // 크리스털·레귤레이터·수동소자
+  box(3.2, .9, 2.5, MAT.silver, -4.5, TOP, 4.2, board);
+  box(2, .6, 1.2, MAT.silver, 10.5, TOP, -4.2, board);
+  box(2.9, 1, 1.6, MAT.chip, -12.8, TOP, -.2, board);
+  const smdPos = [];
+  for (let i = 0; i < 6; i++) smdPos.push([9 + i * 1.6, 1.2, 0], [9 + i * 1.6, 4.6, 0], [-2.5 + i * 1.3, -4.6, 1]);
+  for (let i = 0; i < 4; i++) smdPos.push([-7, -1.6 + i * 1.4, 1], [-1.5, -1.6 + i * 1.4, 1]);
+  const smdGeo = new THREE.BoxGeometry(1, .35, .5); const smd = new THREE.InstancedMesh(smdGeo, MAT.beige, smdPos.length);
+  smdPos.forEach(([x, z, r], i) => { const q = new THREE.Object3D(); q.position.set(x, TOP + .18, z); q.rotation.y = r ? Math.PI / 2 : 0; q.updateMatrix(); smd.setMatrixAt(i, q.matrix); });
+  board.add(smd);
+  // 단자
+  for (const p of BOARD) if (p.kind !== 'nc') addTerm('B:' + p.id, new THREE.Vector3(p.x, PIN_TOP, p.z), board);
+
+  // 핫스팟(홈 화면 설명 라벨)
+  const HOT = [
+    ['gpio', 'GPIO 핀', '#ff7a1a', -24.13 + 5 * P, PIN_TOP + 1, -ROWZ, 'l'],
+    ['mcu', 'STM32F411 MCU', '#e8b04a', 3, TOP + 1.2, 0, 'r'],
+    ['usb', 'USB-C', '#5aa9ff', -BW / 2 + 1, TOP + 3.5, 0, 'l'],
+    ['led', 'C13 LED', '#3fd1a5', -8.1, TOP + 1, -3.6, 'r'],
+    ['key', 'KEY 버튼', '#ffcf5a', -10.5, TOP + 2.8, 3, 'r'],
+    ['reset', 'NRST · BOOT0', '#c58cff', -16.5, TOP + 2.8, -3, 'l'],
+    ['xtal', '25MHz 크리스털', '#d8cfc2', -4.5, TOP + 1, 4.2, 'r'],
+    ['power', '3V3 · GND', '#ff5a4e', 24.13 - P, PIN_TOP + 1, ROWZ, 'r'],
+    ['swd', 'SWD 디버그', '#8fd14f', 23.9, TOP + .3, 0, 'r']
+  ];
+  const hots = HOT.map(([key, text, col, x, y, z, side]) => {
+    const el = document.createElement('div'); el.className = 'hs ' + side; el.style.setProperty('--c', col);
+    el.innerHTML = `<i></i><b><em></em>${text}</b>`; el.onclick = e => { e.stopPropagation(); cb.onHotspot && cb.onHotspot(key); };
+    const o = new CSS2DObject(el); o.position.set(x, y, z); o.visible = false; board.add(o); return o;
+  });
+  const setHotspots = on => hots.forEach(o => { o.visible = on; o.element.style.display = on ? '' : 'none'; });
+  setHotspots(false);
 
   function addTerm(id, pos, parent, small) {
     const hit = mesh(new THREE.SphereGeometry(small ? 1.5 : 1.6, 12, 8), new THREE.MeshBasicMaterial({ color: '#ffd200', transparent: true, opacity: 0, depthWrite: false }), pos.x, pos.y, pos.z, parent);
@@ -446,8 +450,9 @@ export function createScene(host, cb) {
   const el = renderer.domElement;
   function hit(e) {
     const r = el.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
-    ray.setFromCamera(ndc, camera); const h = ray.intersectObjects(pick, false); for (const k of ['term', 'press', 'act']) { const f = h.find(x => x.object.userData.kind === k); if (f) return f; } return h[0] || null;
+    ray.setFromCamera(ndc, camera); const h = ray.intersectObjects(pick, false).filter(x => board.visible || !isBoardObj(x.object)); for (const k of ['press', 'term', 'act']) { const f = h.find(x => x.object.userData.kind === k); if (f) return f; } return h[0] || null;
   }
+  function isBoardObj(o) { while (o) { if (o === board) return true; o = o.parent; } return false; }
   function groundAt(e, y = 0) { plane.constant = -y; const p = new THREE.Vector3(); return ray.ray.intersectPlane(plane, p) ? p : null; }
   let drag = null, down = null;
   el.addEventListener('pointerdown', e => {
@@ -464,7 +469,7 @@ export function createScene(host, cb) {
       if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
       drag.moved = true; const r = el.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(ndc, camera);
       const p = groundAt(e); if (!p) return; const b = built.get(drag.move);
-      b.group.position.set(Math.max(44 + PARTS[b.c.type].w / 2 - 10, p.x - drag.dx), 0, p.z - drag.dz); refreshAnchors(); cb.onMove(drag.move, b.group.position.x, b.group.position.z, false); return;
+      b.group.position.set(p.x - drag.dx, 0, p.z - drag.dz); refreshAnchors(); cb.onMove(drag.move, b.group.position.x, b.group.position.z, false); return;
     }
     if (drag) return;
     const h = hit(e); const id = h && h.object.userData.kind === 'term' ? h.object.userData.id : null;
@@ -502,16 +507,17 @@ export function createScene(host, cb) {
   /* ---------- 시점 ---------- */
   let anim = null;
   function view(name) {
-    const bb = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 10, 0), new THREE.Vector3(BW, 20, BL));
-    if (name !== 'board') for (const b of built.values()) bb.expandByObject(b.group);
+    const bb = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 6, 0), new THREE.Vector3(BW, 12, BL));
+    if (name !== 'board' && name !== 'home') for (const b of built.values()) bb.expandByObject(b.group);
+    if (!board.visible) { bb.makeEmpty(); for (const b of built.values()) bb.expandByObject(b.group); if (bb.isEmpty()) bb.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(40, 20, 40)); }
     bb.min.y = 0; bb.max.y = Math.min(bb.max.y, 45);
     const tgt = bb.getCenter(new THREE.Vector3()).setY(0);
-    const dir = name === 'top' ? new THREE.Vector3(0, 1, .02).normalize() : new THREE.Vector3(0, .78, .62).normalize();
+    const dir = name === 'top' ? new THREE.Vector3(0, 1, .02).normalize() : name === 'home' ? (camera.aspect < .9 ? new THREE.Vector3(-.78, .6, .32) : new THREE.Vector3(-.42, .72, .55)).normalize() : new THREE.Vector3(0, .78, .62).normalize();
     const corners = []; for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) corners.push(new THREE.Vector3(x, y, z));
-    const cam = camera.clone(); let d = 60;
+    const cam = camera.clone(); let d = 15;
     for (; d < 1200; d *= 1.06) {
       cam.position.copy(tgt).addScaledVector(dir, d); cam.lookAt(tgt); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
-      if (corners.every(c => { const v = c.clone().project(cam); return Math.abs(v.x) < .9 && Math.abs(v.y) < .86; })) break;
+      if (corners.every(c => { const v = c.clone().project(cam); return Math.abs(v.x) < (name === 'home' ? .62 : .9) && Math.abs(v.y) < (name === 'home' ? .72 : .86); })) break;
     }
     anim = { from: camera.position.clone(), to: tgt.clone().addScaledVector(dir, d), tf: orbit.target.clone(), tt: tgt, t: 0 };
   }
@@ -522,7 +528,12 @@ export function createScene(host, cb) {
     renderer.setSize(w, h, false); renderer.domElement.style.width = w + 'px'; renderer.domElement.style.height = h + 'px';
     css.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
   }
-  new ResizeObserver(resize).observe(host); resize();
+  const ro = new ResizeObserver(() => resize()); ro.observe(host); resize();
+  function mount(el) { if (el !== host) { ro.unobserve(host); host = el; el.append(renderer.domElement, css.domElement); ro.observe(el); } resize(); }
+  function setBoard(on) { board.visible = on; }
+  function quality(hq) { renderer.setPixelRatio(hq ? Math.min(devicePixelRatio, 1.75) : 1); sun.castShadow = hq; resize(); }
+  function rotate(dir) { const off = camera.position.clone().sub(orbit.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), dir * Math.PI / 8); anim = { from: camera.position.clone(), to: orbit.target.clone().add(off), tf: orbit.target.clone(), tt: orbit.target.clone(), t: 0 }; }
+  function zoom(f) { const off = camera.position.clone().sub(orbit.target).multiplyScalar(f); if (off.length() < 25 || off.length() > 900) return; anim = { from: camera.position.clone(), to: orbit.target.clone().add(off), tf: orbit.target.clone(), tt: orbit.target.clone(), t: 0 }; }
   let last = performance.now(), slow = 0, lowQ = false;
   function render(state) {
     const t = performance.now(), dt = Math.min(.1, (t - last) / 1000); last = t;
@@ -530,17 +541,17 @@ export function createScene(host, cb) {
     if (anim) { anim.t = Math.min(1, anim.t + dt * 2.2); const k = 1 - Math.pow(1 - anim.t, 3); camera.position.lerpVectors(anim.from, anim.to, k); orbit.target.lerpVectors(anim.tf, anim.tt, k); if (anim.t >= 1) anim = null; }
     keyMove(dt); orbit.update();
     if (state) {
-      ld2Mat.emissiveIntensity = state.ld2 * 3; ld2Mat.color.set(state.ld2 > .05 ? '#7dffa6' : '#bfe8c8'); ld2Glow.material.opacity = state.ld2 * .9; const k = 6 + state.ld2 * 14; ld2Glow.scale.set(k, k, 1);
-      b1.position.y = TOP + 3.4 + .8 - (state.b1 ? .7 : 0); b2.position.y = TOP + 3.4 + .8 - (state.b2 ? .7 : 0);
+      ldMat.emissiveIntensity = state.led * 3.5; ldMat.color.set(state.led > .05 ? '#dbe9ff' : '#b9d6ff'); ldGlow.material.opacity = state.led * .95; const k = 5 + state.led * 16; ldGlow.scale.set(k, k, 1);
+      for (const id in caps) caps[id].position.y = TOP + 2.1 - (state.press[id] ? .5 : 0);
       for (const [id, b] of built) { const s = state.parts[id]; if (s) { b.upd(s, dt); const txt = s.status || ''; const sp = b.st.element.firstChild; if (sp.textContent !== txt) sp.textContent = txt; sp.style.visibility = txt ? '' : 'hidden'; } }
     }
     const far = camera.position.distanceTo(orbit.target);
-    host.classList.toggle('far', far > 210); host.classList.toggle('vfar', far > 480);
+    host.classList.toggle('far', far > 170); host.classList.toggle('vfar', far > 480);
     if (window.__norender) return;
     renderer.render(scene, camera); css.render(scene, camera);
   }
 
   function screenPos(id) { const a = anchors.get(id); if (!a) return null; const v = a.clone().project(camera); const r = el.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; }
   function objPos(fn) { let r = null; scene.traverse(o => { if (!r && o.isMesh && fn(o.userData)) { const v = o.getWorldPosition(new THREE.Vector3()).project(camera); const b = el.getBoundingClientRect(); r = { x: b.left + (v.x + 1) / 2 * b.width, y: b.top + (1 - v.y) / 2 * b.height }; } }); return r; }
-  return { setComps, setWires, setPending, highlight, render, view, refreshAnchors, anchors, resize, screenPos, objPos };
+  return { setComps, setWires, setPending, highlight, render, view, refreshAnchors, anchors, resize, screenPos, objPos, mount, setBoard, setHotspots, rotate, zoom, quality };
 }

@@ -1,13 +1,14 @@
-# STM32 실습실
+# Learn STM32
 
-NUCLEO-F401RE 가상 보드를 3D 작업대에 놓고, 부품에 점퍼선을 꽂고, STM32 HAL C 코드를 브라우저에서 바로 실행해보는 실습 사이트입니다.
+STM32F411 Black Pill 보드를 3D로 살펴보고, 부품에 점퍼선을 꽂고, STM32 HAL C 코드를 브라우저에서 바로 실행해보는 실습 사이트입니다.
 
-- 3D 작업대: three.js, 보드는 실측 치수(70 × 82.5mm, Arduino Uno V3 헤더 + ST morpho)로 모델링
-- 조작: 드래그 회전 · 우클릭 드래그 이동 · 휠 확대 · W A S D 이동 · Q E 회전
+- 화면: 홈(보드 3D + 부품 설명) · 레슨 · 부품 · 참고 · 설정
+- 보드: STM32F411CEU6 Black Pill(약 53.3 × 20.8mm, 20핀 × 2, USB-C, KEY·NRST·BOOT0, C13 LED)을 실측 치수로 three.js 모델링
+- 조작: 드래그 이동 · 우클릭 드래그 회전 · Q E 회전 · 휠 확대 · W A S D 이동
 - 부품 15종: LED, RGB LED, 버튼, 가변저항, 부저, DHT11, 7세그먼트, OLED, HC-SR04, 서보, 릴레이+램프, LCD 16x2, 스텝 모터, DC 모터(L298N+엔코더), BLDC+ESC
 
 ## 레슨 (26개 + 자유 실습)
-- GPIO 기초: LD2 깜빡이기, 외부 LED, B1 버튼, 외부 버튼, EXTI 인터럽트
+- GPIO 기초: C13 LED 깜빡이기, 외부 LED, KEY 버튼, 외부 버튼, EXTI 인터럽트
 - 타이머·PWM: 타이머 주기 인터럽트, PWM 밝기, RGB LED, 부저 멜로디
 - 통신: UART 송신, UART 명령 수신, I2C LCD, OLED
 - 센서·표시: ADC, 초음파, DHT11, 7세그먼트

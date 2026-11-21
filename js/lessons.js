@@ -1,5 +1,5 @@
 // 레슨 데이터 — 부품 배치, 필수 배선, 설명, 예제 코드, 완료 조건
-// 단자 id: 보드 핀은 "B:PA5", 부품 단자는 "부품id:단자" (예: led1:+). 보드 GND는 B:GND1/2/3 중 아무거나 같은 넷.
+// 단자 id: 보드 핀은 "B:PB5", 부품 단자는 "부품id:단자" (예: led1:+). 보드 G 핀 2개(B:GND1, B:GND2)는 같은 넷.
 (function () {
 const S1 = 'GPIO 기초', S2 = '타이머 · PWM', S3 = '통신', S4 = '센서 · 표시', S5 = '모터 제어', S6 = '종합';
 const G = 'B:GND1';
@@ -7,20 +7,21 @@ const G = 'B:GND1';
 window.LESSONS = [
 /* ================= GPIO 기초 ================= */
 {
-  id: 'blink', sec: S1, title: 'LD2 깜빡이기', tag: 'GPIO 출력',
+  id: 'blink', sec: S1, title: 'C13 LED 깜빡이기', tag: 'GPIO 출력',
   comps: [], wiring: [],
-  goal: { text: 'LD2가 4번 이상 바뀌면 완료', check: s => s.ld2Edges >= 4 },
+  goal: { text: '보드의 C13 LED가 4번 이상 바뀌면 완료', check: s => s.ld2Edges >= 4 },
   overview: `
-<p>보드에 달린 초록색 LED <b>LD2</b>는 <b>PA5</b> 핀에 연결돼 있어요. 배선 없이 코드만으로 깜빡여 봅니다.</p>
+<p>Black Pill 보드의 파란 LED는 <b>PC13</b>에 연결돼 있어요. 배선 없이 코드만으로 깜빡여 봅니다.</p>
 <h4>핵심 개념</h4>
 <ul>
-<li><b>클럭 활성화</b>: STM32는 주변장치 클럭이 꺼져 있어요. <code>__HAL_RCC_GPIOA_CLK_ENABLE()</code>를 먼저 호출해야 GPIOA가 동작합니다.</li>
-<li><b>GPIO 초기화</b>: <code>GPIO_InitTypeDef</code> 구조체에 핀·모드를 채우고 <code>HAL_GPIO_Init()</code>로 적용합니다.</li>
-<li><b>Push-Pull 출력</b>: <code>GPIO_MODE_OUTPUT_PP</code>는 HIGH(3.3V)와 LOW(0V)를 모두 직접 출력해요.</li>
+<li><b>Active-Low</b>: 이 LED는 3.3V → LED → PC13으로 연결돼 있어서 핀이 <b>LOW일 때 켜지고</b> HIGH일 때 꺼져요.</li>
+<li><b>클럭 활성화</b>: STM32는 주변장치 클럭이 꺼져 있어요. <code>__HAL_RCC_GPIOC_CLK_ENABLE()</code>를 먼저 호출해야 GPIOC가 동작합니다.</li>
+<li><b>GPIO 초기화</b>: <code>GPIO_InitTypeDef</code> 구조체에 핀·모드를 채우고 <code>HAL_GPIO_Init()</code>로 적용해요.</li>
+<li>PC13은 전류를 많이 낼 수 없는 핀(최대 3mA)이라 LED 정도만 연결해요.</li>
 </ul>
 <h4>도전</h4>
-<p><code>__HAL_RCC_GPIOA_CLK_ENABLE()</code> 줄을 지우고 실행해보세요. 실제 보드에서도 똑같이 동작하지 않아요.</p>`,
-  spec: [['LD2', 'PA5, HIGH일 때 켜짐'], ['PA5 다른 기능', 'SPI1_SCK, Arduino D13'], ['HAL_Delay 기준', 'SysTick 1ms']],
+<p><code>__HAL_RCC_GPIOC_CLK_ENABLE()</code> 줄을 지우고 실행해보세요. 실제 보드에서도 똑같이 동작하지 않아요.</p>`,
+  spec: [['보드 LED', 'PC13, LOW일 때 켜짐'], ['PC13 출력 전류', '최대 3mA (백업 도메인 핀)'], ['HAL_Delay 기준', 'SysTick 1ms']],
   code: `#include "main.h"
 
 void MX_GPIO_Init(void);
@@ -33,32 +34,33 @@ int main(void)
 
   while (1)
   {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);  // LD2(PA5) 상태 반전
-    HAL_Delay(500);                          // 500ms 대기
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);  // C13 LED 상태 반전
+    HAL_Delay(500);                           // 500ms 대기
   }
 }
 
 void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+  __HAL_RCC_GPIOC_CLK_ENABLE();              // GPIOC 클럭 켜기
 
-  __HAL_RCC_GPIOA_CLK_ENABLE();             // GPIOA 클럭 켜기
-
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);   // 시작은 꺼진 상태(HIGH)
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 }
 `
 },
+
 {
   id: 'ext-led', sec: S1, title: '외부 LED 연결', tag: 'GPIO 출력 · 배선',
   comps: [{ id: 'led1', type: 'led', color: 'red', name: 'LED 빨강', x: 600, y: 250 }],
   wiring: [['B:PB5', 'led1:+'], ['led1:-', G]],
   goal: { text: '배선을 맞게 하고 LED가 4번 이상 깜빡이면 완료', check: s => s.ledEdges.led1 >= 4 },
   overview: `
-<p>저항이 내장된 LED 모듈을 <b>D4(PB5)</b>에 연결합니다.</p>
+<p>저항이 내장된 LED 모듈을 <b>PB5</b>에 연결합니다.</p>
 <h4>배선 방법</h4>
 <ol><li>부품이나 보드의 핀(동그라미)을 누르고, 연결할 다른 핀을 누르면 전선이 생겨요.</li><li>전선을 누르면 삭제됩니다. <kbd>Esc</kbd>로 선택을 취소해요. 부품 몸체를 끌면 옮겨져요.</li></ol>
 <h4>핵심 개념</h4>
@@ -67,11 +69,11 @@ void MX_GPIO_Init(void)
 <li>실제 LED에는 220Ω~1kΩ 저항을 직렬로 꼭 넣어야 해요. 이 모듈은 저항이 내장돼 있습니다.</li>
 <li>STM32 핀 하나의 출력 전류는 최대 25mA예요. 큰 부하는 트랜지스터나 릴레이로 구동합니다.</li>
 </ul>`,
-  spec: [['D4', 'PB5'], ['핀당 최대 전류', '±25mA'], ['LED 모듈', '저항 내장, +/− 2핀']],
+  spec: [['핀', 'PB5'], ['핀당 최대 전류', '±25mA'], ['LED 모듈', '저항 내장, +/− 2핀']],
   code: `#include "main.h"
 
 #define LED_PORT  GPIOB
-#define LED_PIN   GPIO_PIN_5   // D4
+#define LED_PIN   GPIO_PIN_5   // 
 
 void MX_GPIO_Init(void);
 
@@ -103,20 +105,20 @@ void MX_GPIO_Init(void)
 `
 },
 {
-  id: 'user-button', sec: S1, title: '사용자 버튼 B1', tag: 'GPIO 입력 · 폴링',
+  id: 'user-button', sec: S1, title: 'KEY 버튼 읽기', tag: 'GPIO 입력 · 폴링',
   comps: [], wiring: [],
-  goal: { text: 'B1을 눌러 LD2를 2번 이상 바꾸면 완료', check: s => s.reactive >= 2 && s.presses >= 1 },
+  goal: { text: 'KEY 버튼으로 C13 LED를 2번 이상 바꾸면 완료', check: s => s.reactive >= 2 && s.presses >= 1 },
   overview: `
-<p>보드의 파란 버튼 <b>B1</b>은 <b>PC13</b>에 연결돼 있어요. 누르는 동안 LD2를 켭니다. 반복문에서 계속 핀을 읽는 방식을 <b>폴링</b>이라고 해요.</p>
+<p>보드의 <b>KEY</b> 버튼은 <b>PA0</b>에 연결돼 있어요. 누르는 동안 C13 LED를 켭니다. 반복문에서 계속 핀을 읽는 방식을 <b>폴링</b>이라고 해요.</p>
 <h4>핵심 개념</h4>
 <ul>
-<li><b>Active-Low</b>: B1은 보드에 풀업 저항이 있어 평소 HIGH(1), 누르면 LOW(0)를 읽어요.</li>
-<li><code>HAL_GPIO_ReadPin()</code>은 <code>GPIO_PIN_SET</code>(1) 또는 <code>GPIO_PIN_RESET</code>(0)을 돌려줍니다.</li>
-<li>검은 <b>B2</b>(RESET)를 누르면 프로그램이 처음부터 다시 시작해요.</li>
+<li>KEY는 누르면 PA0을 GND에 연결해요. 그래서 <b>내부 풀업</b>(<code>GPIO_PULLUP</code>)을 켜야 평소 HIGH(1), 누르면 LOW(0)를 읽어요.</li>
+<li>LED도 Active-Low라서 <code>GPIO_PIN_RESET</code>을 쓰면 켜져요.</li>
+<li><b>NRST</b> 버튼을 누르면 프로그램이 처음부터 다시 시작해요. <b>BOOT0</b>은 USB로 펌웨어를 올릴 때 쓰는 부트 모드 버튼이에요.</li>
 </ul>
 <h4>도전</h4>
-<p>누를 때마다 LD2가 토글되도록 바꿔보세요. 이전 상태를 변수에 저장해 <b>눌린 순간(엣지)</b>만 감지하면 됩니다.</p>`,
-  spec: [['B1 USER', 'PC13, 누르면 LOW'], ['B2 RESET', 'NRST'], ['내장 풀업/풀다운', '약 40kΩ']],
+<p>누를 때마다 LED가 토글되도록 바꿔보세요. 이전 상태를 변수에 저장해 <b>눌린 순간(엣지)</b>만 감지하면 됩니다.</p>`,
+  spec: [['KEY', 'PA0, 누르면 LOW (내부 풀업 필요)'], ['NRST', '리셋'], ['BOOT0', '시스템 부트로더 진입']],
   code: `#include "main.h"
 
 void MX_GPIO_Init(void);
@@ -129,11 +131,11 @@ int main(void)
 
   while (1)
   {
-    // B1은 Active-Low: 누르면 GPIO_PIN_RESET
-    if (HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) == GPIO_PIN_RESET)
-      HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+    // KEY는 누르면 LOW, LED도 LOW일 때 켜짐
+    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET)
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);   // 켜기
     else
-      HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);     // 끄기
   }
 }
 
@@ -143,18 +145,19 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
 
-  GPIO_InitStruct.Pin = LD2_Pin;               // PA5 출력
+  GPIO_InitStruct.Pin = GPIO_PIN_13;           // C13 LED 출력
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  GPIO_InitStruct.Pin = B1_Pin;                // PC13 입력
+  GPIO_InitStruct.Pin = GPIO_PIN_0;            // KEY 입력
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;          // 보드에 풀업 저항 있음
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  GPIO_InitStruct.Pull = GPIO_PULLUP;          // 내부 풀업 켜기
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }
 `
 },
+
 {
   id: 'ext-button', sec: S1, title: '외부 버튼 + LED', tag: 'GPIO 입력 · 배선',
   comps: [
@@ -164,7 +167,7 @@ void MX_GPIO_Init(void)
   wiring: [['btn1:S', 'B:PA10'], ['btn1:+', 'B:3V3'], ['btn1:-', G], ['led1:+', 'B:PB5'], ['led1:-', G]],
   goal: { text: '버튼으로 LED를 2번 이상 바꾸면 완료', check: s => s.reactive >= 2 && s.presses >= 1 && s.ledEdges.led1 >= 2 },
   overview: `
-<p>버튼 모듈을 <b>D2(PA10)</b>에, LED를 <b>D4(PB5)</b>에 연결해 버튼으로 LED를 켭니다.</p>
+<p>버튼 모듈을 <b>PA10</b>에, LED를 <b>PB5</b>에 연결해 버튼으로 LED를 켭니다.</p>
 <h4>핵심 개념</h4>
 <ul>
 <li>버튼 모듈의 <b>S</b>는 누르면 HIGH, 떼면 LOW예요 (모듈에 풀다운 저항 내장).</li>
@@ -173,7 +176,7 @@ void MX_GPIO_Init(void)
 </ul>
 <h4>도전</h4>
 <p>버튼을 누를 때마다 LED가 토글되게 바꾸고, 채터링(바운스)을 막기 위해 20ms 디바운스를 넣어보세요.</p>`,
-  spec: [['D2', 'PA10'], ['D4', 'PB5'], ['버튼 모듈', 'S / + / −, 누르면 S=HIGH']],
+  spec: [['버튼 핀', 'PA10'], ['LED 핀', 'PB5'], ['버튼 모듈', 'S / + / −, 누르면 S=HIGH']],
   code: `#include "main.h"
 
 void MX_GPIO_Init(void);
@@ -186,8 +189,8 @@ int main(void)
 
   while (1)
   {
-    GPIO_PinState btn = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10);  // D2
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, btn);                 // D4 LED
+    GPIO_PinState btn = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10);  // 
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, btn);                 // B5 LED
   }
 }
 
@@ -212,20 +215,20 @@ void MX_GPIO_Init(void)
 {
   id: 'exti', sec: S1, title: '외부 인터럽트 EXTI', tag: 'EXTI · NVIC · 콜백',
   comps: [], wiring: [],
-  goal: { text: 'B1 인터럽트로 LD2를 2번 이상 토글하면 완료', check: s => (s.irq.exti || 0) >= 2 && s.ld2Edges >= 2 },
+  goal: { text: 'KEY 인터럽트로 C13 LED를 2번 이상 토글하면 완료', check: s => (s.irq.exti || 0) >= 2 && s.ld2Edges >= 2 },
   overview: `
 <p>폴링은 CPU가 계속 버튼을 확인해야 해요. <b>인터럽트</b>는 버튼이 눌리는 순간 하드웨어가 알려주고, CPU는 그때만 콜백 함수를 실행합니다.</p>
 <h4>핵심 개념</h4>
 <ul>
-<li><code>GPIO_MODE_IT_FALLING</code>: 신호가 HIGH→LOW로 떨어지는 순간(B1 누름) 인터럽트 발생.</li>
-<li>핀 번호마다 EXTI 라인이 정해져 있어요. PC13은 <b>EXTI13</b> → <code>EXTI15_10_IRQn</code>.</li>
+<li><code>GPIO_MODE_IT_FALLING</code>: 신호가 HIGH→LOW로 떨어지는 순간(KEY 누름) 인터럽트 발생.</li>
+<li>핀 번호마다 EXTI 라인이 정해져 있어요. PA0은 <b>EXTI0</b> → <code>EXTI0_IRQn</code>.</li>
 <li><b>NVIC</b>에서 해당 IRQ를 켜야(<code>HAL_NVIC_EnableIRQ</code>) 실제로 인터럽트가 들어와요.</li>
 <li>HAL은 공통 콜백 <code>HAL_GPIO_EXTI_Callback(GPIO_Pin)</code>을 호출해요. 콜백은 짧게, 무거운 일(printf 등)은 <b>플래그</b>만 세우고 main에서 처리합니다.</li>
 <li>콜백과 main이 함께 쓰는 변수는 <code>volatile</code>로 선언하세요.</li>
 </ul>
 <h4>도전</h4>
 <p><code>GPIO_MODE_IT_RISING_FALLING</code>으로 바꿔 누를 때와 뗄 때 모두 반응하게 해보세요.</p>`,
-  spec: [['B1', 'PC13 → EXTI13'], ['IRQ', 'EXTI15_10_IRQn'], ['콜백', 'HAL_GPIO_EXTI_Callback']],
+  spec: [['KEY', 'PA0 → EXTI0'], ['IRQ', 'EXTI0_IRQn'], ['콜백', 'HAL_GPIO_EXTI_Callback']],
   code: `#include "main.h"
 #include <stdio.h>
 
@@ -240,11 +243,11 @@ int main(void)
   SystemClock_Config();
   MX_GPIO_Init();
   MX_USART2_UART_Init();
-  printf("B1을 눌러보세요 (인터럽트)\\r\\n");
+  printf("KEY 버튼을 눌러보세요 (인터럽트)\\r\\n");
 
   while (1)
   {
-    if (flag)                       // 인터럽트가 세운 플래그 확인
+    if (flag)                        // 인터럽트가 세운 플래그 확인
     {
       flag = 0;
       printf("버튼 인터럽트 %d회\\r\\n", press_count);
@@ -252,12 +255,12 @@ int main(void)
   }
 }
 
-// B1이 눌리는 순간(하강 엣지) 자동으로 호출됨
+// KEY가 눌리는 순간(하강 엣지) 자동으로 호출됨
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  if (GPIO_Pin == B1_Pin)
+  if (GPIO_Pin == GPIO_PIN_0)
   {
-    HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
     press_count++;
     flag = 1;
   }
@@ -269,39 +272,40 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
 
-  GPIO_InitStruct.Pin = LD2_Pin;
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;   // 하강 엣지 인터럽트
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;    // 하강 엣지 인터럽트
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);            // NVIC에서 켜기
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);                 // NVIC에서 켜기
 }
 `
 },
+
 
 /* ================= 타이머 · PWM ================= */
 {
   id: 'timer-it', sec: S2, title: '타이머 주기 인터럽트', tag: 'TIM11 · 업데이트 인터럽트',
   comps: [], wiring: [],
-  goal: { text: '타이머 인터럽트가 4번 이상 발생하고 LD2가 토글되면 완료', check: s => (s.irq.tim || 0) >= 4 && s.ld2Edges >= 4 },
+  goal: { text: '타이머 인터럽트가 4번 이상 발생하고 C13 LED가 토글되면 완료', check: s => (s.irq.tim || 0) >= 4 && s.ld2Edges >= 4 },
   overview: `
 <p>HAL_Delay는 기다리는 동안 CPU를 붙잡아요. 하드웨어 타이머가 일정 주기마다 인터럽트를 걸게 하면 main은 다른 일을 하면서도 정확한 주기로 작업할 수 있어요. <b>PID 제어 루프</b>도 이 방식으로 돌립니다.</p>
 <h4>핵심 개념</h4>
 <ul>
-<li>주기 = (PSC+1) × (ARR+1) / 타이머 클럭. TIM11 클럭 84MHz, PSC 8399 → 10kHz(0.1ms).</li>
+<li>주기 = (PSC+1) × (ARR+1) / 타이머 클럭. TIM11 클럭 100MHz, PSC 9999 → 10kHz(0.1ms).</li>
 <li>ARR 4999 → 5000 × 0.1ms = <b>0.5초</b>마다 업데이트 이벤트.</li>
 <li><code>HAL_TIM_Base_Start_IT()</code>로 시작하면 주기마다 <code>HAL_TIM_PeriodElapsedCallback()</code>이 호출돼요.</li>
 <li>여러 타이머가 같은 콜백을 쓰므로 <code>htim->Instance</code>로 어느 타이머인지 구분합니다.</li>
 </ul>
 <h4>도전</h4>
-<p>ARR을 바꿔 0.1초 주기로 만들고, main에서는 B1 버튼 폴링을 동시에 해보세요.</p>`,
-  spec: [['TIM11 클럭', '84MHz (APB2)'], ['PSC / ARR', '8399 / 4999 → 0.5s'], ['IRQ', 'TIM1_TRG_COM_TIM11_IRQn']],
+<p>ARR을 바꿔 0.1초 주기로 만들고, main에서는 KEY 버튼 폴링을 동시에 해보세요.</p>`,
+  spec: [['TIM11 클럭', '100MHz'], ['PSC / ARR', '9999 / 4999 → 0.5s'], ['IRQ', 'TIM1_TRG_COM_TIM11_IRQn']],
   code: `#include "main.h"
 #include <stdio.h>
 
@@ -314,7 +318,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM11)          // TIM11 업데이트 인터럽트
   {
     ticks++;
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
   }
 }
 
@@ -324,7 +328,7 @@ int main(void)
   SystemClock_Config();
   MX_GPIO_Init();
   MX_USART2_UART_Init();
-  MX_TIM11_Init();                      // PSC=8399 → 10kHz
+  MX_TIM11_Init();                      // PSC=9999 → 10kHz
 
   __HAL_TIM_SET_AUTORELOAD(&htim11, 4999);   // 5000 × 0.1ms = 0.5s
   HAL_TIM_Base_Start_IT(&htim11);
@@ -339,10 +343,10 @@ int main(void)
 void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 }
 `
 },
@@ -352,23 +356,23 @@ void MX_GPIO_Init(void)
   wiring: [['led1:+', 'B:PA6'], ['led1:-', G]],
   goal: { text: 'LED 밝기가 5단계 이상 바뀌면 완료', check: s => s.ledLevels.led1 && s.ledLevels.led1.size >= 5 },
   overview: `
-<p><b>D12(PA6)</b>는 <b>TIM3 채널 1</b>로 PWM을 낼 수 있어요. 듀티비를 바꿔 LED가 서서히 밝아지고 어두워지게 합니다.</p>
+<p><b>PA6</b>는 <b>TIM3 채널 1</b>로 PWM을 낼 수 있어요. 듀티비를 바꿔 LED가 서서히 밝아지고 어두워지게 합니다.</p>
 <h4>핵심 개념</h4>
 <ul>
-<li><b>PWM 주파수</b> = 타이머 클럭 / (PSC+1) / (ARR+1) = 84MHz / 84 / 1000 = <b>1kHz</b>.</li>
+<li><b>PWM 주파수</b> = 타이머 클럭 / (PSC+1) / (ARR+1) = 100MHz / 100 / 1000 = <b>1kHz</b>.</li>
 <li><b>듀티비</b> = CCR / (ARR+1). <code>__HAL_TIM_SET_COMPARE()</code>로 CCR 값을 바꿉니다.</li>
 <li>핀은 GPIO가 아닌 <b>대체 기능(AF2, TIM3)</b> 모드예요. <code>MX_TIM3_Init()</code>이 처리합니다.</li>
 </ul>
 <h4>도전</h4>
 <p>밝기 변화가 눈에 자연스럽도록 듀티를 제곱 곡선(감마 보정)으로 바꿔보세요.</p>`,
-  spec: [['D12', 'PA6 = TIM3_CH1 (AF2)'], ['PSC / ARR', '83 / 999 → 1kHz'], ['CCR 범위', '0 ~ 999']],
+  spec: [['핀', 'PA6 = TIM3_CH1 (AF2)'], ['PSC / ARR', '99 / 999 → 1kHz'], ['CCR 범위', '0 ~ 999']],
   code: `#include "main.h"
 
 int main(void)
 {
   HAL_Init();
   SystemClock_Config();
-  MX_TIM3_Init();                              // PSC=83, ARR=999 → 1kHz
+  MX_TIM3_Init();                              // PSC=99, ARR=999 → 1kHz
 
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);   // PA6 PWM 시작
 
@@ -396,7 +400,7 @@ int main(void)
   overview: `
 <p>한 타이머(TIM3)의 채널 3개로 빨강·초록·파랑 밝기를 따로 조절해 색을 섞어요.</p>
 <h4>배선</h4>
-<ul><li>R → <b>D12(PA6)</b> TIM3_CH1, G → <b>D11(PA7)</b> TIM3_CH2, B → <b>A3(PB0)</b> TIM3_CH3, − → GND</li></ul>
+<ul><li>R → <b>PA6</b> TIM3_CH1, G → <b>PA7</b> TIM3_CH2, B → <b>PB0</b> TIM3_CH3, − → GND</li></ul>
 <h4>핵심 개념</h4>
 <ul>
 <li>같은 타이머의 채널은 주기(ARR)를 공유하고 듀티(CCR)만 따로 가져요.</li>
@@ -446,8 +450,8 @@ int main(void)
 <li><b>능동 부저</b>는 전원만 넣으면 정해진 음이 나서 GPIO ON/OFF로 충분해요.</li>
 </ul>
 <h4>도전</h4>
-<p>B1을 누르면 경고음(1kHz↔2kHz 교대)이 나게 해보세요.</p>`,
-  spec: [['D10', 'PB6 = TIM4_CH1'], ['TIM4 카운트', '1MHz (PSC 83)'], ['도4 / 라4', '262Hz / 440Hz']],
+<p>KEY 버튼을 누르면 경고음(1kHz↔2kHz 교대)이 나게 해보세요.</p>`,
+  spec: [['핀', 'PB6 = TIM4_CH1'], ['TIM4 카운트', '1MHz (PSC 99)'], ['도4 / 라4', '262Hz / 440Hz']],
   code: `#include "main.h"
 
 int melody[] = {262, 294, 330, 349, 392, 440, 494, 523};   // 도레미파솔라시도
@@ -493,11 +497,12 @@ int main(void)
   comps: [], wiring: [],
   goal: { text: '시리얼 모니터에 3줄 이상 출력되면 완료', check: s => s.serialLines >= 3 },
   overview: `
-<p>Nucleo의 <b>USART2</b>(PA2/PA3)는 ST-LINK를 거쳐 USB 가상 COM 포트로 PC에 연결돼 있어요. 아래 시리얼 모니터에서 출력을 확인합니다.</p>
+<p><b>USART2</b>(TX=A2, RX=A3)에 USB-시리얼 어댑터(CH340·CP2102 등)를 연결해 PC와 통신해요. 어댑터 TX→A3, RX→A2, GND→G로 연결한다고 보고, 아래 시리얼 모니터에서 출력을 확인합니다.</p>
 <h4>핵심 개념</h4>
 <ul>
 <li><code>HAL_UART_Transmit(&amp;huart2, 버퍼, 길이, 타임아웃)</code>으로 바이트를 보냅니다.</li>
 <li>실제 보드에서 <code>printf</code>를 쓰려면 <code>__io_putchar()</code>를 UART로 연결(retarget)해야 해요. 이 실습실은 이미 된 상태입니다.</li>
+<li>Black Pill의 USB-C는 MCU의 USB(PA11/PA12)에 직접 연결돼 있어서, USB CDC(가상 COM)로도 출력할 수 있어요. 그때는 <code>CDC_Transmit_FS()</code>를 씁니다.</li>
 <li><b>플로터</b> 탭: <code>printf("a:%d,b:%d\\r\\n", ...)</code>처럼 출력하면 그래프로 그려줘요.</li>
 </ul>
 <h4>실제 보드용 retarget 코드</h4>
@@ -506,7 +511,7 @@ int main(void)
   HAL_UART_Transmit(&amp;huart2, (uint8_t *)&amp;ch, 1, HAL_MAX_DELAY);
   return ch;
 }</pre>`,
-  spec: [['USART2 TX/RX', 'PA2 (D1) / PA3 (D0)'], ['설정', '115200 bps, 8N1'], ['HAL_GetTick()', '부팅 후 경과 ms']],
+  spec: [['USART2 TX/RX', 'PA2 / PA3'], ['설정', '115200 bps, 8N1'], ['USB-C', 'PA11(D−) / PA12(D+), USB OTG FS'], ['HAL_GetTick()', '부팅 후 경과 ms']],
   code: `#include "main.h"
 #include <stdio.h>
 #include <string.h>
@@ -535,9 +540,9 @@ int main(void)
 {
   id: 'uart-rx', sec: S3, title: 'UART 명령 수신', tag: 'USART2 · 수신 인터럽트',
   comps: [], wiring: [],
-  goal: { text: '시리얼 입력창으로 명령을 보내 LD2를 2번 이상 바꾸면 완료', check: s => s.rxBytes >= 2 && s.ld2Edges >= 2 },
+  goal: { text: '시리얼 입력창으로 명령을 보내 C13 LED를 2번 이상 바꾸면 완료', check: s => s.rxBytes >= 2 && s.ld2Edges >= 2 },
   overview: `
-<p>PC에서 보낸 문자를 받아 LD2를 제어해요. 실행 후 시리얼 모니터 아래 입력창에 <b>1</b>, <b>0</b>, <b>t</b>를 입력하고 보내기를 누르세요.</p>
+<p>PC에서 보낸 문자를 받아 C13 LED를 제어해요. 실행 후 시리얼 모니터 아래 입력창에 <b>1</b>, <b>0</b>, <b>t</b>를 입력하고 보내기를 누르세요.</p>
 <h4>핵심 개념</h4>
 <ul>
 <li><code>HAL_UART_Receive_IT(&amp;huart2, rx, 1)</code>: 1바이트가 들어오면 <code>HAL_UART_RxCpltCallback()</code>이 호출돼요.</li>
@@ -560,9 +565,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   if (huart->Instance == USART2)
   {
     char c = rx[0];
-    if (c == '1')      { HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);   printf("LED ON\\r\\n"); }
-    else if (c == '0') { HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); printf("LED OFF\\r\\n"); }
-    else if (c == 't') { HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);               printf("TOGGLE\\r\\n"); }
+    if (c == '1')      { HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); printf("LED ON\\r\\n"); }   // LOW = 켜짐
+    else if (c == '0') { HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);   printf("LED OFF\\r\\n"); }
+    else if (c == 't') { HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);              printf("TOGGLE\\r\\n"); }
     else if (c != '\\r' && c != '\\n') printf("알 수 없는 명령: %c\\r\\n", c);
 
     HAL_UART_Receive_IT(&huart2, rx, 1);   // 다음 1바이트 다시 대기
@@ -588,10 +593,10 @@ int main(void)
 void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 }
 `
 },
@@ -603,7 +608,7 @@ void MX_GPIO_Init(void)
   overview: `
 <p><b>I2C</b>는 SDA(데이터)·SCL(클럭) 두 선으로 여러 장치와 통신해요. 장치마다 7비트 <b>주소</b>가 있어서 같은 선에 여러 개를 연결할 수 있습니다.</p>
 <h4>배선</h4>
-<ul><li>SDA → <b>D14(PB9)</b>, SCL → <b>D15(PB8)</b>, VCC → 5V, GND → GND</li></ul>
+<ul><li>SDA → <b>PB9</b>, SCL → <b>PB8</b>, VCC → 5V, GND → GND</li></ul>
 <h4>핵심 개념</h4>
 <ul>
 <li>HAL은 주소를 <b>왼쪽으로 1비트 민</b> 8비트로 받아요: <code>0x27 &lt;&lt; 1</code>.</li>
@@ -699,10 +704,10 @@ int main(void)
 {
   id: 'adc', sec: S4, title: '가변저항 ADC 읽기', tag: 'ADC1 · 아날로그',
   comps: [{ id: 'pot1', type: 'pot', name: '가변저항', x: 600, y: 280 }],
-  wiring: [['pot1:+', 'B:3V3'], ['pot1:S', 'B:PA0'], ['pot1:-', G]],
+  wiring: [['pot1:+', 'B:3V3'], ['pot1:S', 'B:PA1'], ['pot1:-', G]],
   goal: { text: '노브를 돌려 서로 다른 값 4개 이상 읽으면 완료', check: s => s.adcValues.size >= 4 }, plot: true,
   overview: `
-<p>가변저항의 가운데 단자(<b>S</b>)를 <b>A0(PA0)</b>에 연결하고 12비트 ADC로 전압을 읽어요. 노브를 끌어서 돌려보세요. 플로터 탭에서 그래프로 볼 수 있어요.</p>
+<p>가변저항의 가운데 단자(<b>S</b>)를 <b>PA1</b>에 연결하고 12비트 ADC로 전압을 읽어요. 노브를 끌어서 돌려보세요. 플로터 탭에서 그래프로 볼 수 있어요.</p>
 <h4>핵심 개념</h4>
 <ul>
 <li><b>12비트 ADC</b>: 0~3.3V를 0~4095로 바꿔요. 전압(mV) = 값 × 3300 / 4095.</li>
@@ -710,7 +715,7 @@ int main(void)
 <li>ADC 입력에 3.3V를 넘는 전압을 넣으면 안 돼요. 가변저항 +는 반드시 <b>3V3</b>에.</li>
 <li>다른 채널은 <code>ADC_ChannelConfTypeDef</code>의 <code>Channel</code>을 바꿔 <code>HAL_ADC_ConfigChannel()</code>로 선택해요.</li>
 </ul>`,
-  spec: [['A0', 'PA0 = ADC1_IN0'], ['분해능', '12bit (0~4095)'], ['기준 전압', 'VDDA = 3.3V']],
+  spec: [['A1', 'PA1 = ADC1_IN1'], ['분해능', '12bit (0~4095)'], ['기준 전압', 'VDDA = 3.3V'], ['ADC 핀', 'A0~A7, B0, B1 (10채널)']],
   code: `#include "main.h"
 #include <stdio.h>
 
@@ -719,7 +724,7 @@ int main(void)
   HAL_Init();
   SystemClock_Config();
   MX_USART2_UART_Init();
-  MX_ADC1_Init();             // PA0 = ADC1 채널 0
+  MX_ADC1_Init();             // PA1 = ADC1 채널 1 (PA0은 KEY 버튼)
 
   while (1)
   {
@@ -751,14 +756,14 @@ int main(void)
 </ul>
 <h4>도전</h4>
 <p>거리가 10cm 이하면 부저가 울리는 주차 센서를 만들어보세요.</p>`,
-  spec: [['TRIG / ECHO', 'PA9 (D8) / PA8 (D7)'], ['측정 범위', '2 ~ 400cm'], ['µs 타이머', 'TIM5, 1MHz, 32bit']],
+  spec: [['TRIG / ECHO', 'PA9 / PA8'], ['측정 범위', '2 ~ 400cm'], ['µs 타이머', 'TIM5, 1MHz, 32bit']],
   code: `#include "main.h"
 #include <stdio.h>
 
 #define TRIG_PORT GPIOA
-#define TRIG_PIN  GPIO_PIN_9    // D8
+#define TRIG_PIN  GPIO_PIN_9    // 
 #define ECHO_PORT GPIOA
-#define ECHO_PIN  GPIO_PIN_8    // D7
+#define ECHO_PIN  GPIO_PIN_8    // 
 
 void MX_GPIO_Init(void);
 
@@ -835,7 +840,7 @@ void MX_GPIO_Init(void)
 <p>µs 단위 비트 읽기는 <code>dht11.h</code> 드라이버의 <code>DHT11_Read(포트, 핀)</code>가 처리한다고 가정해요. 결과 구조체에 <code>ok</code>, <code>Temperature</code>, <code>Humidity</code>가 들어 있어요. DHT11은 <b>1초에 한 번</b>만 읽을 수 있어요.</p>
 <h4>도전</h4>
 <p>LCD 레슨과 합쳐 온습도계를 만들어보세요.</p>`,
-  spec: [['DATA', 'PA10 (D2)'], ['범위', '0~50°C ±2°C, 20~90% ±5%'], ['읽기 간격', '1초 이상']],
+  spec: [['DATA', 'PA10'], ['범위', '0~50°C ±2°C, 20~90% ±5%'], ['읽기 간격', '1초 이상']],
   code: `#include "main.h"
 #include <stdio.h>
 #include "dht11.h"
@@ -849,7 +854,7 @@ int main(void)
 
   while (1)
   {
-    DHT11_Data d = DHT11_Read(GPIOA, GPIO_PIN_10);   // D2
+    DHT11_Data d = DHT11_Read(GPIOA, GPIO_PIN_10);   // 
     if (d.ok)
       printf("temp:%d,humi:%d\\r\\n", d.Temperature, d.Humidity);
     else
@@ -862,12 +867,12 @@ int main(void)
 {
   id: 'seg7', sec: S4, title: '7세그먼트 숫자 표시', tag: 'GPIO 8개 · 배열',
   comps: [{ id: 'seg1', type: 'seg7', name: '7세그먼트 (공통 캐소드)', x: 560, y: 230 }],
-  wiring: [['seg1:a', 'B:PA10'], ['seg1:b', 'B:PB3'], ['seg1:c', 'B:PB5'], ['seg1:d', 'B:PB4'], ['seg1:e', 'B:PB10'], ['seg1:f', 'B:PA8'], ['seg1:g', 'B:PA9'], ['seg1:dp', 'B:PC7'], ['seg1:COM', G]],
+  wiring: [['seg1:a', 'B:PA10'], ['seg1:b', 'B:PB3'], ['seg1:c', 'B:PB5'], ['seg1:d', 'B:PB4'], ['seg1:e', 'B:PB10'], ['seg1:f', 'B:PA8'], ['seg1:g', 'B:PA9'], ['seg1:dp', 'B:PB12'], ['seg1:COM', G]],
   goal: { text: '숫자 5개 이상을 정확히 표시하면 완료', check: s => s.digits.size >= 5 },
   overview: `
 <p>세그먼트 a~g와 점(dp)을 각각 핀에 연결하고, 숫자마다 켤 세그먼트를 <b>비트 패턴</b>으로 저장해 표시해요.</p>
 <h4>배선</h4>
-<ul><li>a→D2(PA10), b→D3(PB3), c→D4(PB5), d→D5(PB4), e→D6(PB10), f→D7(PA8), g→D8(PA9), dp→D9(PC7), COM→GND</li></ul>
+<ul><li>a→A10, b→B3, c→B5, d→B4, e→B10, f→A8, g→A9, dp→B12, COM→G</li></ul>
 <h4>핵심 개념</h4>
 <ul>
 <li>비트0=a … 비트6=g. 0은 a~f가 켜져 <code>0x3F</code>, 1은 b·c만 켜져 <code>0x06</code>.</li>
@@ -877,9 +882,9 @@ int main(void)
   spec: [['세그먼트', 'a~g + dp'], ['종류', '공통 캐소드'], ['0~9 패턴', '0x3F 0x06 0x5B 0x4F 0x66 0x6D 0x7D 0x07 0x7F 0x6F']],
   code: `#include "main.h"
 
-GPIO_TypeDef *seg_port[8] = {GPIOA, GPIOB, GPIOB, GPIOB, GPIOB, GPIOA, GPIOA, GPIOC};
+GPIO_TypeDef *seg_port[8] = {GPIOA, GPIOB, GPIOB, GPIOB, GPIOB, GPIOA, GPIOA, GPIOB};
 uint16_t seg_pin[8] = {GPIO_PIN_10, GPIO_PIN_3, GPIO_PIN_5, GPIO_PIN_4,
-                       GPIO_PIN_10, GPIO_PIN_8, GPIO_PIN_9, GPIO_PIN_7};   // a b c d e f g dp
+                       GPIO_PIN_10, GPIO_PIN_8, GPIO_PIN_9, GPIO_PIN_12};  // a b c d e f g dp
 
 uint8_t digits[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F};
 
@@ -913,15 +918,12 @@ void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 
   GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-  GPIO_InitStruct.Pin = GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_10;
+  GPIO_InitStruct.Pin = GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_10 | GPIO_PIN_12;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-  GPIO_InitStruct.Pin = GPIO_PIN_7;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 }
 `
 },
@@ -940,7 +942,7 @@ void MX_GPIO_Init(void)
 <li>코일에는 끌 때 역기전력이 생겨서 <b>플라이백 다이오드</b>가 필요해요. 모듈에 들어 있어요.</li>
 <li>220V를 다룰 때는 반드시 절연·퓨즈를 갖추고 전문가 확인을 받으세요.</li>
 </ul>`,
-  spec: [['신호', 'PB5 (D4), HIGH=ON'], ['모듈 전원', '5V'], ['접점 정격', '10A 250VAC (SRD-05VDC)']],
+  spec: [['신호', 'PB5, HIGH=ON'], ['모듈 전원', '5V'], ['접점 정격', '10A 250VAC (SRD-05VDC)']],
   code: `#include "main.h"
 #include <stdio.h>
 
@@ -980,14 +982,14 @@ void MX_GPIO_Init(void)
   wiring: [['servo1:S', 'B:PA8'], ['servo1:+', 'B:5V'], ['servo1:-', G]],
   goal: { text: '서보를 0° 근처와 180° 근처까지 움직이면 완료', check: s => s.servoMin <= 20 && s.servoMax >= 160 },
   overview: `
-<p>서보모터는 <b>50Hz(20ms 주기)</b> 펄스의 폭으로 각도를 정해요. 내부에 위치 센서와 제어 회로가 있어 스스로 그 각도를 유지합니다. <b>D7(PA8)</b>의 TIM1 채널 1을 씁니다.</p>
+<p>서보모터는 <b>50Hz(20ms 주기)</b> 펄스의 폭으로 각도를 정해요. 내부에 위치 센서와 제어 회로가 있어 스스로 그 각도를 유지합니다. <b>PA8</b>의 TIM1 채널 1을 씁니다.</p>
 <h4>핵심 개념</h4>
 <ul>
 <li>펄스 0.5ms → 0°, 1.5ms → 90°, 2.5ms → 180° (SG90 기준, 제품마다 조금 달라요).</li>
 <li>TIM1을 1MHz로 세고 ARR=19999로 두면 CCR 값이 곧 펄스 폭(µs)이 돼요.</li>
 <li>서보 전원은 <b>5V</b>, 신호선은 3.3V 로직으로도 대부분 동작해요. 큰 서보는 별도 전원을 쓰세요.</li>
 </ul>`,
-  spec: [['D7', 'PA8 = TIM1_CH1'], ['PSC / ARR', '83 / 19999 → 50Hz'], ['서보 선 색', '주황=신호, 빨강=+, 갈색=−']],
+  spec: [['핀', 'PA8 = TIM1_CH1'], ['PSC / ARR', '99 / 19999 → 50Hz'], ['서보 선 색', '주황=신호, 빨강=+, 갈색=−']],
   code: `#include "main.h"
 
 uint32_t angle_to_pulse(int angle)
@@ -1163,7 +1165,7 @@ void MX_GPIO_Init(void)
 {
   id: 'encoder', sec: S5, title: '엔코더로 속도 측정', tag: 'TIM2 엔코더 모드',
   comps: [{ id: 'm1', type: 'dcmotor', name: 'DC 모터 + L298N + 엔코더', x: 500, y: 240 }],
-  wiring: [['m1:ENA', 'B:PA6'], ['m1:IN1', 'B:PB5'], ['m1:IN2', 'B:PB4'], ['m1:+', 'B:5V'], ['m1:-', G], ['m1:A', 'B:PA0'], ['m1:B', 'B:PA1']],
+  wiring: [['m1:ENA', 'B:PA6'], ['m1:IN1', 'B:PB5'], ['m1:IN2', 'B:PB4'], ['m1:+', 'B:5V'], ['m1:-', G], ['m1:A', 'B:PA15'], ['m1:B', 'B:PB3']],
   goal: { text: '속도를 10번 이상 측정하면 완료 (바퀴를 끌어 부하를 줘보세요)', check: s => s.serialLines >= 10 && s.rpmMax >= 100 }, plot: true,
   overview: `
 <p>모터 축의 <b>쿼드러처 엔코더</b>는 A·B 두 신호를 90° 어긋나게 내보내요. 타이머의 <b>엔코더 모드</b>가 펄스를 하드웨어로 세고 방향까지 판별합니다.</p>
@@ -1175,7 +1177,7 @@ void MX_GPIO_Init(void)
 <li>Δt는 µs 타이머(TIM5)로 실제 경과 시간을 재면 정확해요.</li>
 <li><b>바퀴를 끌어 부하</b>를 주면 같은 PWM에서도 속도가 떨어져요. 이걸 자동으로 보정하는 게 다음 레슨의 PID예요.</li>
 </ul>`,
-  spec: [['엔코더 A / B', 'PA0 / PA1 (TIM2 CH1/CH2)'], ['분해능', '1320 카운트/회전 (4체배)'], ['측정 주기', '100ms']],
+  spec: [['엔코더 A / B', 'PA15 / PB3 (TIM2 CH1/CH2)'], ['분해능', '1320 카운트/회전 (4체배)'], ['측정 주기', '100ms']],
   code: `#include "main.h"
 #include <stdio.h>
 
@@ -1229,7 +1231,7 @@ void MX_GPIO_Init(void)
 {
   id: 'pid-speed', sec: S5, title: 'PID 속도 제어', tag: '폐루프 · 튜닝',
   comps: [{ id: 'm1', type: 'dcmotor', name: 'DC 모터 + L298N + 엔코더', x: 500, y: 240 }],
-  wiring: [['m1:ENA', 'B:PA6'], ['m1:IN1', 'B:PB5'], ['m1:IN2', 'B:PB4'], ['m1:+', 'B:5V'], ['m1:-', G], ['m1:A', 'B:PA0'], ['m1:B', 'B:PA1']],
+  wiring: [['m1:ENA', 'B:PA6'], ['m1:IN1', 'B:PB5'], ['m1:IN2', 'B:PB4'], ['m1:+', 'B:5V'], ['m1:-', G], ['m1:A', 'B:PA15'], ['m1:B', 'B:PB3']],
   goal: { text: '부하 30% 이상에서도 120±6rpm을 1초 이상 유지하면 완료', check: s => s.holdMax >= 1 }, plot: true,
   overview: `
 <p>목표 속도(120rpm)와 실제 속도의 차이(오차)로 PWM을 자동 조절해요. <b>바퀴를 끌어 부하를 줘도</b> 속도가 유지되는지 플로터로 확인하세요.</p>
@@ -1339,7 +1341,7 @@ void MX_GPIO_Init(void)
 {
   id: 'pid-position', sec: S5, title: 'PID 위치 제어', tag: '엔코더 · PD 제어',
   comps: [{ id: 'm1', type: 'dcmotor', name: 'DC 모터 + L298N + 엔코더', x: 500, y: 240 }],
-  wiring: [['m1:ENA', 'B:PA6'], ['m1:IN1', 'B:PB5'], ['m1:IN2', 'B:PB4'], ['m1:+', 'B:5V'], ['m1:-', G], ['m1:A', 'B:PA0'], ['m1:B', 'B:PA1']],
+  wiring: [['m1:ENA', 'B:PA6'], ['m1:IN1', 'B:PB5'], ['m1:IN2', 'B:PB4'], ['m1:+', 'B:5V'], ['m1:-', G], ['m1:A', 'B:PA15'], ['m1:B', 'B:PB3']],
   goal: { text: '360° 목표에 ±5° 안으로 0.5초 이상 멈추면 완료', check: s => s.posHoldMax >= .5 }, plot: true,
   overview: `
 <p>DC 모터를 서보처럼 <b>원하는 각도</b>로 보내요. 엔코더로 위치를 재고, 오차의 부호에 따라 방향을, 크기에 따라 PWM을 정합니다. 목표는 3초마다 0° ↔ 360°로 바뀌어요.</p>
@@ -1515,7 +1517,7 @@ int main(void)
   overview: `
 <p>차량 신호등 3색 LED와 보행자 버튼을 연결합니다. 평소엔 초록불, 버튼을 누르면 노랑 → 빨강으로 바뀌고 일정 시간 뒤 초록으로 돌아와요.</p>
 <h4>배선</h4>
-<ul><li>빨강 → <b>D4(PB5)</b>, 노랑 → <b>D5(PB4)</b>, 초록 → <b>D6(PB10)</b></li><li>버튼 S → <b>D2(PA10)</b>, + → 3V3, − → GND</li></ul>
+<ul><li>빨강 → <b>PB5</b>, 노랑 → <b>PB4</b>, 초록 → <b>PB10</b></li><li>버튼 S → <b>PA10</b>, + → 3V3, − → GND</li></ul>
 <h4>핵심 개념</h4>
 <ul>
 <li><b>상태 기계</b>: 현재 상태를 변수로 두고 조건에 따라 다음 상태로 넘어가요.</li>
@@ -1527,9 +1529,9 @@ int main(void)
   code: `#include "main.h"
 #include <stdio.h>
 
-#define RED     GPIO_PIN_5    // PB5  (D4)
-#define YELLOW  GPIO_PIN_4    // PB4  (D5)
-#define GREEN   GPIO_PIN_10   // PB10 (D6)
+#define RED     GPIO_PIN_5    // PB5
+#define YELLOW  GPIO_PIN_4    // PB4
+#define GREEN   GPIO_PIN_10   // PB10
 
 void MX_GPIO_Init(void);
 
@@ -1616,7 +1618,7 @@ int main(void)
   printf("자유 실습 시작\\r\\n");
   while (1)
   {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
     HAL_Delay(500);
   }
 }

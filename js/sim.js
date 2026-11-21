@@ -107,7 +107,7 @@ const yieldNow = () => new Promise(r => { if (mc) { waiters.push(r); mc.port2.po
 
 /* ---------- 4. 가상 MCU ---------- */
 class Stop extends Error {}
-const CLK = 84e6;
+const CLK = 100e6;   // STM32F411 @100MHz, 타이머 클럭 100MHz
 
 function createRuntime(hw) {
   const now = () => performance.now();
@@ -133,20 +133,20 @@ function createRuntime(hw) {
     NULL: 0, TIM_CHANNEL_1: 1, TIM_CHANNEL_2: 2, TIM_CHANNEL_3: 3, TIM_CHANNEL_4: 4, TIM_CHANNEL_ALL: 0x3C,
     EXTI0_IRQn: 6, EXTI1_IRQn: 7, EXTI2_IRQn: 8, EXTI3_IRQn: 9, EXTI4_IRQn: 10, EXTI9_5_IRQn: 23, EXTI15_10_IRQn: 40,
     TIM1_TRG_COM_TIM11_IRQn: 26, TIM2_IRQn: 28, TIM3_IRQn: 29, TIM4_IRQn: 30, USART2_IRQn: 38,
-    LD2_Pin: 1 << 5, B1_Pin: 1 << 13, USART_TX_Pin: 1 << 2, USART_RX_Pin: 1 << 3,
+    LED_Pin: 1 << 13, KEY_Pin: 1 << 0, USART_TX_Pin: 1 << 2, USART_RX_Pin: 1 << 3,
     hadc1: { name: 'ADC1' }, huart2: { name: 'USART2', Instance: { n: 'USART2' } }, hi2c1: { name: 'I2C1' },
-    htim1: mkTim(1, 83, 19999, { 1: 'PA8', 2: 'PA9' }),
-    htim2: mkTim(2, 0, 0xFFFFFFFF, { 1: 'PA0', 2: 'PA1' }, { enc: false }),
-    htim3: mkTim(3, 83, 999, { 1: 'PA6', 2: 'PA7', 3: 'PB0' }),
-    htim4: mkTim(4, 83, 999, { 1: 'PB6' }),
-    htim5: mkTim(5, 83, 0xFFFFFFFF, {}),
-    htim11: mkTim(11, 8399, 99, {}),
+    htim1: mkTim(1, 99, 19999, { 1: 'PA8', 2: 'PA9' }),
+    htim2: mkTim(2, 0, 0xFFFFFFFF, { 1: 'PA15', 2: 'PB3' }, { enc: false }),
+    htim3: mkTim(3, 99, 999, { 1: 'PA6', 2: 'PA7', 3: 'PB0', 4: 'PB1' }),
+    htim4: mkTim(4, 99, 999, { 1: 'PB6', 2: 'PB7' }),
+    htim5: mkTim(5, 99, 0xFFFFFFFF, {}),
+    htim11: mkTim(11, 9999, 99, {}),
     White: 1, Black: 0, Font_6x8: { w: 6, h: 8 }, Font_7x10: { w: 7, h: 10 }, Font_11x18: { w: 11, h: 18 }, Font_16x26: { w: 16, h: 26 },
     SSD1306_WIDTH: 128, SSD1306_HEIGHT: 64, M_PI: Math.PI,
   });
   api.USART2 = api.huart2.Instance;
-  api.LD2_GPIO_Port = api.GPIOA; api.B1_GPIO_Port = api.GPIOC;
-  const ADC_CH = { 0: 'PA0', 1: 'PA1', 4: 'PA4', 8: 'PB0', 10: 'PC0', 11: 'PC1' };
+  api.LED_GPIO_Port = api.GPIOC; api.KEY_GPIO_Port = api.GPIOA;
+  const ADC_CH = { 0: 'PA0', 1: 'PA1', 2: 'PA2', 3: 'PA3', 4: 'PA4', 5: 'PA5', 6: 'PA6', 7: 'PA7', 8: 'PB0', 9: 'PB1' };
   for (let i = 0; i < 19; i++) api['ADC_CHANNEL_' + i] = i;
   for (const k of ['3', '15', '28', '56', '84', '112', '144', '480']) api['ADC_SAMPLETIME_' + k + 'CYCLES'] = 0;
   const TIMS = [api.htim1, api.htim2, api.htim3, api.htim4, api.htim5, api.htim11];
@@ -236,7 +236,7 @@ function createRuntime(hw) {
   }
   const i2cOk = (addr, what) => {
     if (!st.i2c) { warn('i2c', 'I2C1이 초기화되지 않았어요. MX_I2C1_Init()을 먼저 호출하세요.'); return false; }
-    if (!hw.i2cReady(addr)) { warn('i2c' + addr, `I2C 주소 0x${addr.toString(16).toUpperCase()}(${what})에서 응답이 없어요. SDA→PB9(D14), SCL→PB8(D15), 전원 배선을 확인하세요.`); return false; }
+    if (!hw.i2cReady(addr)) { warn('i2c' + addr, `I2C 주소 0x${addr.toString(16).toUpperCase()}(${what})에서 응답이 없어요. SDA→B9, SCL→B8, 전원 배선을 확인하세요.`); return false; }
     return true;
   };
 
@@ -283,9 +283,9 @@ function createRuntime(hw) {
     },
     MX_GPIO_Init: () => { warn('mxgpio', 'MX_GPIO_Init()을 직접 작성하지 않아 아무 핀도 설정되지 않았어요.'); },
     MX_USART2_UART_Init: () => { st.uart = true; setPin('PA2', { mode: 'af' }); setPin('PA3', { mode: 'af' }); },
-    MX_ADC1_Init: () => { st.adc.ready = true; st.clk.A = true; setPin('PA0', { mode: 'an' }); st.adc.ch = 0; },
+    MX_ADC1_Init: () => { st.adc.ready = true; st.clk.A = true; setPin('PA1', { mode: 'an' }); st.adc.ch = 1; },
     MX_TIM1_Init: () => { setPin('PA8', { mode: 'af' }); setPin('PA9', { mode: 'af' }); },
-    MX_TIM2_Init: () => { setPin('PA0', { mode: 'af' }); setPin('PA1', { mode: 'af' }); },
+    MX_TIM2_Init: () => { setPin('PA15', { mode: 'af' }); setPin('PB3', { mode: 'af' }); },
     MX_TIM3_Init: () => { setPin('PA6', { mode: 'af' }); setPin('PA7', { mode: 'af' }); setPin('PB0', { mode: 'af' }); },
     MX_TIM4_Init: () => { setPin('PB6', { mode: 'af' }); },
     MX_TIM5_Init: () => 0, MX_TIM11_Init: () => { st.nvic[26] = true; },
@@ -314,8 +314,8 @@ function createRuntime(hw) {
     HAL_TIM_Base_Start_IT: h => { h.started = true; h.t0 = now(); h.it = true; h.next = now() + (h.arr + 1) * 1000 / h.tick; return 0; },
     HAL_TIM_Base_Stop_IT: h => { h.it = false; return 0; },
     HAL_TIM_Encoder_Start: h => {
-      if (h !== api.htim2) throw new Error('엔코더 모드는 이 실습실에서 htim2(PA0/PA1)만 지원해요');
-      if (st.pins.PA0?.mode !== 'af') warn('enc', 'PA0/PA1이 타이머 기능으로 설정되지 않았어요. MX_TIM2_Init()을 먼저 호출하세요.');
+      if (h !== api.htim2) throw new Error('엔코더 모드는 이 실습실에서 htim2(A15/B3)만 지원해요');
+      if (st.pins.PA15?.mode !== 'af') warn('enc', 'A15/B3이 타이머 기능으로 설정되지 않았어요. MX_TIM2_Init()을 먼저 호출하세요.');
       h.enc = true; h.off = hw.encoder(); return 0;
     },
     __HAL_TIM_SET_COMPARE: (h, ch, v) => { pwmChange(); h.ccr[ch] = Math.max(0, Number(v) || 0); pwmChange(); },

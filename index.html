@@ -2,90 +2,144 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>STM32 실습실</title>
-<meta name="description" content="NUCLEO-F401RE 가상 보드에서 배선하고 HAL 코드를 실행해보는 STM32 입문 실습">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#17120e">
+<title>Learn STM32</title>
+<meta name="description" content="STM32F411 Black Pill 보드를 3D로 살펴보고, 부품을 배선하고, HAL C 코드를 브라우저에서 실행해보는 STM32 입문 실습">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <div class="chip-mcu" aria-hidden="true"><i></i></div>
-    <div>
-      <h1>STM32 실습실</h1>
-      <p>NUCLEO-F401RE 가상 보드에서 배선하고 HAL 코드를 실행해보세요</p>
+<main class="wrap">
+
+  <!-- 홈 -->
+  <section class="view" id="v-home">
+    <header class="hero">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect x="16" y="16" width="32" height="32" rx="5" fill="none" stroke="currentColor" stroke-width="5"/><rect x="26" y="26" width="12" height="12" rx="2" fill="currentColor"/><path d="M24 6v8M32 6v8M40 6v8M24 50v8M32 50v8M40 50v8M6 24h8M6 32h8M6 40h8M50 24h8M50 32h8M50 40h8" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/></svg>
+      <div><h1>LEARN <em>STM32</em></h1><p>탐구 · 조립 · 연결 · 창작</p></div>
+    </header>
+    <div class="stat">
+      <div class="stat-l">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 10c7-2 13-1 18 3v27c-5-4-11-5-18-3zM42 10c-7-2-13-1-18 3v27c5-4 11-5 18-3z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>
+        <div class="stat-txt"><b id="secName">GPIO 기초</b><div class="pbar"><span id="progBar"></span></div></div>
+        <strong id="progText">0/26</strong>
+      </div>
+      <div class="stat-r"><span id="clkDate"></span><span id="clkTime"></span></div>
     </div>
-  </div>
-  <div class="prog"><span id="progText">0 / 0 완료</span><div class="bar"><span id="progBar"></span></div></div>
-</header>
-
-<div class="app">
-  <nav class="lessons card" aria-label="레슨 목록">
-    <h2>레슨</h2>
-    <ol id="lessonList"></ol>
-  </nav>
-
-  <main class="bench">
-    <section class="card">
-      <div class="toolbar">
-        <button class="btn primary" id="runBtn" title="실행 (Ctrl+Enter)"><svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>실행</button>
-        <button class="btn" id="stopBtn"><svg viewBox="0 0 14 14"><rect x="2.5" y="2.5" width="9" height="9" rx="1" fill="currentColor"/></svg>정지</button>
-        <span class="status" id="status"><i></i><span>대기</span></span>
-        <button class="btn" id="soundBtn" aria-pressed="true">소리 켬</button>
-        <span class="spacer"></span>
-        <span class="wirechip" id="wireChip">배선 없음</span>
-        <button class="btn" id="hintBtn">배선 힌트</button>
-        <button class="btn" id="clearBtn">전선 지우기</button>
-      </div>
-      <div class="palette" id="palette" hidden>
-        <label for="partSel">부품</label><select id="partSel"></select><button class="btn" id="addPart">부품 추가</button>
-        <span class="note">부품 몸체를 끌어 옮기고, × 로 삭제해요</span>
-      </div>
-      <div class="stage3d" id="stage">
-        <div class="views"><button class="vbtn" data-view="all">전체</button><button class="vbtn" data-view="top">위에서</button><button class="vbtn" data-view="board">보드 확대</button></div>
-        <div class="keys">드래그 회전 · 우클릭 드래그 이동 · 휠 확대 · W A S D 이동 · Q E 회전</div>
-      </div>
-      <div class="info" id="info">핀을 누른 뒤 연결할 다른 핀을 누르면 전선이 생겨요. 전선을 누르면 지워집니다.</div>
-    </section>
-
-    <section class="card serial">
-      <header>
-        <div class="stabs" role="tablist"><button class="stab" data-view="mon" aria-selected="true">시리얼 모니터</button><button class="stab" data-view="plot" aria-selected="false">플로터</button></div>
-        <span class="sinfo">USART2 · 115200 bps</span><button class="btn" id="clrSerial">지우기</button>
-      </header>
-      <pre id="out" aria-live="polite"></pre>
-      <canvas id="plot" hidden></canvas>
-      <form class="rx" id="rxForm"><input id="rxIn" placeholder="보드로 보낼 문자 (UART 수신)" autocomplete="off"><select id="rxEnd" aria-label="줄 끝"><option value="none">줄 끝 없음</option><option value="lf">LF</option><option value="crlf">CR+LF</option></select><button class="btn">보내기</button></form>
-    </section>
-  </main>
-
-  <section class="panel card" aria-label="레슨 설명">
-    <div class="ph"><small id="lTag"></small><h2 id="lTitle"></h2></div>
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" data-tab="ov" aria-selected="true">개요</button>
-      <button class="tab" role="tab" data-tab="pin" aria-selected="false">핀맵</button>
-      <button class="tab" role="tab" data-tab="code" aria-selected="false">예제 코드</button>
-      <button class="tab" role="tab" data-tab="spec" aria-selected="false">사양</button>
-    </div>
-    <div class="pane" id="p-ov"><div class="goal" id="goal"><i></i><span></span></div><div id="ovBody"></div></div>
-    <div class="pane" id="p-pin" hidden></div>
-    <div class="pane" id="p-code" hidden>
-      <div class="edbar">
-        <button class="btn primary" id="runBtn2"><svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>실행</button>
-        <button class="btn" id="resetCode">예제로 되돌리기</button>
-        <button class="btn" id="copyCode">복사</button>
-      </div>
-      <div class="editor"><pre class="gutter" id="gutter">1</pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="C 코드 편집기"></textarea></div>
-      <p class="hintline">Ctrl+Enter 실행 · 고친 코드는 이 브라우저에 자동 저장돼요 · STM32 HAL의 일부 함수만 지원합니다</p>
-    </div>
-    <div class="pane" id="p-spec" hidden></div>
+    <div class="viewer" id="homeViewer"></div>
+    <div class="sheet" id="hsSheet" hidden><i></i><div><h3></h3><p></p></div><button class="x" aria-label="닫기">×</button></div>
+    <div class="next card" id="nextCard"></div>
   </section>
+
+  <!-- 레슨 목록 -->
+  <section class="view" id="v-lessons" hidden>
+    <header class="phead"><h2>레슨</h2><p>Black Pill로 GPIO부터 PID 모터 제어까지</p></header>
+    <ol class="llist" id="lessonList"></ol>
+  </section>
+
+  <!-- 레슨 상세 -->
+  <section class="view" id="v-lesson" hidden>
+    <div class="lhead">
+      <a class="back" href="#lessons" aria-label="레슨 목록"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <div><small id="lTag"></small><h2 id="lTitle"></h2></div>
+    </div>
+    <div class="lgrid">
+      <div class="lmain">
+        <div class="goal" id="goal"><i></i><span></span></div>
+        <div class="palette card" id="palette" hidden>
+          <select id="partSel" aria-label="부품"></select><button class="btn" id="addPart">부품 추가</button>
+          <span class="note">부품 몸체를 끌어 옮기고, × 로 삭제해요</span>
+        </div>
+        <div class="viewer" id="lessonViewer"></div>
+        <div class="wirebar">
+          <button class="btn primary" id="runBtn" title="실행 (Ctrl+Enter)"><svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>실행</button>
+          <button class="btn" id="stopBtn"><svg viewBox="0 0 14 14"><rect x="2.5" y="2.5" width="9" height="9" rx="1" fill="currentColor"/></svg>정지</button>
+          <span class="wirechip" id="wireChip">배선 없음</span>
+          <button class="btn sm" id="hintBtn">배선 힌트</button>
+          <button class="btn sm" id="clearBtn">전선 지우기</button>
+        </div>
+        <p class="info" id="info"></p>
+        <div class="card serial">
+          <header>
+            <b>시리얼 모니터</b><span class="pill" id="status"><i></i><span>정지됨</span></span>
+            <div class="stabs"><button class="stab" data-view="mon" aria-selected="true">모니터</button><button class="stab" data-view="plot" aria-selected="false">플로터</button></div>
+            <button class="btn sm" id="clrSerial">지우기</button>
+          </header>
+          <pre id="out" aria-live="polite"></pre>
+          <canvas id="plot" hidden></canvas>
+          <form class="rx" id="rxForm"><input id="rxIn" placeholder="보드로 보낼 문자 (UART 수신)" autocomplete="off"><select id="rxEnd" aria-label="줄 끝"><option value="none">줄 끝 없음</option><option value="lf">LF</option><option value="crlf">CR+LF</option></select><button class="btn sm">보내기</button></form>
+        </div>
+      </div>
+      <div class="lside card">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" data-tab="ov" aria-selected="true">개요</button>
+          <button class="tab" role="tab" data-tab="pin" aria-selected="false">핀맵</button>
+          <button class="tab" role="tab" data-tab="code" aria-selected="false">예제</button>
+          <button class="tab" role="tab" data-tab="spec" aria-selected="false">사양</button>
+        </div>
+        <div class="pane" id="p-ov"><div id="ovBody"></div></div>
+        <div class="pane" id="p-pin" hidden></div>
+        <div class="pane" id="p-code" hidden>
+          <h4 class="try">직접 해보기</h4>
+          <div class="edbar">
+            <button class="btn primary" id="runBtn2"><svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>실행</button>
+            <button class="btn" id="resetCode">예제로 되돌리기</button>
+            <button class="btn" id="copyCode">복사</button>
+          </div>
+          <div class="editor"><pre class="gutter" id="gutter">1</pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="C 코드 편집기"></textarea></div>
+          <p class="hint">Ctrl+Enter 실행 · 고친 코드는 이 브라우저에 자동 저장돼요</p>
+        </div>
+        <div class="pane" id="p-spec" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 부품 -->
+  <section class="view" id="v-parts" hidden>
+    <header class="phead"><h2>부품</h2><p>실습에 쓰는 부품 15종. 눌러서 3D로 살펴보세요</p></header>
+    <div class="viewer" id="partsViewer"></div>
+    <div class="partinfo card" id="partInfo"></div>
+    <div class="pgrid" id="partGrid"></div>
+  </section>
+
+  <!-- 참고 -->
+  <section class="view" id="v-ref" hidden>
+    <header class="phead"><h2>참고</h2><p>조작법 · 핀맵 · 주변장치 · HAL 함수</p></header>
+    <div id="refBody"></div>
+  </section>
+
+  <!-- 설정 -->
+  <section class="view" id="v-settings" hidden>
+    <header class="phead"><h2>설정</h2><p>이 브라우저에만 저장돼요</p></header>
+    <div class="card setlist" id="setBody"></div>
+  </section>
+</main>
+
+<!-- 3D 무대: 지금 화면의 뷰어 안으로 옮겨 다닌다 -->
+<div class="stage3d" id="stage">
+  <div class="vtools">
+    <button data-cam="rl" aria-label="왼쪽으로 회전"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button data-cam="rr" aria-label="오른쪽으로 회전"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <span></span>
+    <button data-cam="zo" aria-label="축소"><svg viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+    <button data-cam="zi" aria-label="확대"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+    <span></span>
+    <button data-cam="reset" aria-label="시점 초기화"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 5l2.6 7H9.4z" fill="#ff7a1a"/><path d="M12 19l-2.6-7h5.2z" fill="currentColor"/></svg></button>
+  </div>
+  <div class="vhelp">드래그 이동 · 우클릭 드래그 회전 · Q / E 회전 · 휠 확대</div>
 </div>
+
+<nav class="tabbar" aria-label="메뉴">
+  <a href="#home" data-nav="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" fill="currentColor"/></svg>홈</a>
+  <a href="#lessons" data-nav="lessons"><svg viewBox="0 0 24 24"><path d="M3 5c3-1 6-.6 9 1.5V20c-3-2-6-2.5-9-1.5zM21 5c-3-1-6-.6-9 1.5V20c3-2 6-2.5 9-1.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>레슨</a>
+  <a href="#parts" data-nav="parts"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="9.5" y="9.5" width="5" height="5" fill="currentColor"/><path d="M9 2v3M12 2v3M15 2v3M9 19v3M12 19v3M15 19v3M2 9h3M2 12h3M2 15h3M19 9h3M19 12h3M19 15h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>부품</a>
+  <a href="#ref" data-nav="ref"><svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.5 12h7M8.5 15.5h7M8.5 8.5h3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>참고</a>
+  <a href="#settings" data-nav="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5l1.6 2.6 3-.6.9 2.9 2.8 1.2-.9 2.9 1.6 2.5-2.4 1.9.3 3-3 .4-1.2 2.8-2.7-1.4-2.7 1.4-1.2-2.8-3-.4.3-3-2.4-1.9 1.6-2.5-.9-2.9 2.8-1.2.9-2.9 3 .6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>설정</a>
+</nav>
 <div class="toast" id="toast" role="status"></div>
 
 <script src="js/lessons.js"></script>

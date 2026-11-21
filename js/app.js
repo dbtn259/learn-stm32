@@ -19,17 +19,20 @@ const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } c
 /* ---------- 보드 핀 ---------- */
 const BOARD_PINS = BOARD.filter(p => p.kind !== 'nc');
 const AF = {
-  PA0: 'ADC1_IN0 · TIM2_CH1(엔코더 A)', PA1: 'ADC1_IN1 · TIM2_CH2(엔코더 B)', PA4: 'ADC1_IN4', PB0: 'ADC1_IN8 · TIM3_CH3', PC1: 'ADC1_IN11', PC0: 'ADC1_IN10',
-  PB8: 'I2C1_SCL', PB9: 'I2C1_SDA', PA5: 'LD2 · SPI1_SCK', PA6: 'TIM3_CH1 · SPI1_MISO', PA7: 'TIM3_CH2 · SPI1_MOSI', PB6: 'TIM4_CH1 · I2C1_SCL',
-  PC7: 'TIM3_CH2', PA9: 'TIM1_CH2 · USART1_TX', PA8: 'TIM1_CH1', PB10: 'TIM2_CH3 · I2C2_SCL', PB4: 'TIM3_CH1', PB5: 'TIM3_CH2',
-  PB3: 'TIM2_CH2', PA10: 'USART1_RX', PA2: 'USART2_TX (가상 COM)', PA3: 'USART2_RX (가상 COM)',
-  '3V3': '3.3V 전원 출력', '5V': '5V 전원 출력 (USB)', GND1: '접지', GND2: '접지', GND3: '접지'
+  PA0: 'KEY 버튼 · ADC1_IN0 · TIM5_CH1', PA1: 'ADC1_IN1 · TIM2_CH2', PA2: 'USART2_TX · ADC1_IN2', PA3: 'USART2_RX · ADC1_IN3', PA4: 'ADC1_IN4 · SPI1_NSS', PA5: 'ADC1_IN5 · SPI1_SCK',
+  PA6: 'TIM3_CH1 · ADC1_IN6 · SPI1_MISO', PA7: 'TIM3_CH2 · ADC1_IN7 · SPI1_MOSI', PA8: 'TIM1_CH1', PA9: 'TIM1_CH2 · USART1_TX', PA10: 'TIM1_CH3 · USART1_RX',
+  PA11: 'USB D− (USB-C와 연결)', PA12: 'USB D+ (USB-C와 연결)', PA15: 'TIM2_CH1(엔코더 A) · SPI1_NSS', PB0: 'TIM3_CH3 · ADC1_IN8', PB1: 'TIM3_CH4 · ADC1_IN9', PB2: 'BOOT1',
+  PB3: 'TIM2_CH2(엔코더 B) · SPI1_SCK', PB4: 'TIM3_CH1 · SPI1_MISO', PB5: 'TIM3_CH2 · SPI1_MOSI', PB6: 'TIM4_CH1 · I2C1_SCL', PB7: 'TIM4_CH2 · I2C1_SDA',
+  PB8: 'I2C1_SCL · TIM4_CH3', PB9: 'I2C1_SDA · TIM4_CH4', PB10: 'TIM2_CH3 · I2C2_SCL', PB12: 'SPI2_NSS', PB13: 'SPI2_SCK', PB14: 'SPI2_MISO', PB15: 'SPI2_MOSI',
+  PC13: '보드 LED (LOW일 때 켜짐)', PC14: 'OSC32_IN (32.768kHz)', PC15: 'OSC32_OUT (32.768kHz)',
+  '3V3': '3.3V 출력', '3V3_2': '3.3V 출력', '5V': '5V (USB)', '5V_2': '5V (USB)', GND1: '접지', GND2: '접지'
 };
 const BP = Object.fromEntries(BOARD.map(p => [p.id, p]));
 
 /* ---------- 상태 ---------- */
 let cur = LESSONS[0], comps = [], wires = [], pending = null, nets = new Map(), members = new Map();
-let rt = null, running = false, stats = null, hintTimer = 0, b1 = false, b2 = false, ld2Lit = false;
+let rt = null, running = false, stats = null, hintTimer = 0, ld2Lit = false;
+const press = { KEY: false, NRST: false, BOOT0: false };
 const cs = {}, ios = {};
 const TERMS = new Set();
 const compOf = id => comps.find(c => c.id === id);
@@ -45,7 +48,7 @@ function rebuildNets() {
   const parent = new Map();
   const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
   for (const id of TERMS) parent.set(id, id);
-  parent.set(find('B:GND1'), find('B:GND2')); parent.set(find('B:GND2'), find('B:GND3'));
+  for (const [a, b] of [['B:GND1', 'B:GND2'], ['B:3V3', 'B:3V3_2'], ['B:5V', 'B:5V_2']]) if (parent.has(a) && parent.has(b)) parent.set(find(a), find(b));
   for (const [a, b] of wires) if (parent.has(a) && parent.has(b)) parent.set(find(a), find(b));
   nets = new Map(); members = new Map();
   for (const id of parent.keys()) { const r = find(id); nets.set(id, r); if (!members.has(r)) members.set(r, []); members.get(r).push(id); }
@@ -89,7 +92,7 @@ function updateMotors() { const t = now(); eachPart((c, P, s, io) => { if (P.upd
 
 const hw = {
   readPin(p, pull, silent) {
-    if (p === 'PC13') return b1 ? 0 : 1;
+    if (p === 'PA0' && press.KEY) return 0;   // KEY: 누르면 PA0이 GND
     const id = 'B:' + p;
     if (!TERMS.has(id)) return pull === 1 ? 1 : 0;
     const t = now();
@@ -122,7 +125,7 @@ const hw = {
   },
   onWrite() {
     const t = now(); updateMotors(); eachPart((c, P, s, io) => { if (P.onWrite) P.onWrite(c, s, io, t); if (c.type === 'led') P.step(c, s, io, 0, t); });
-    const d2 = rt && rt.drive('PA5'); const on = !!d2 && d2.level > .5; if (on !== ld2Lit) { ld2Lit = on; edge('ld2', on, t); }
+    const on = ledOn() > .5; if (on !== ld2Lit) { ld2Lit = on; edge('ld2', on, t); }
   },
   onPwm: () => updateMotors(),
   encoder() {
@@ -130,10 +133,10 @@ const hw = {
     eachPart((c, P, s, io) => {
       if (c.type !== 'dcmotor' || r !== null || !io.powered()) return;
       P.update(c, s, io, now());
-      if (sameNet(c.id + ':A', 'B:PA0') && sameNet(c.id + ':B', 'B:PA1')) r = P.encoder(s);
-      else if (sameNet(c.id + ':A', 'B:PA1') && sameNet(c.id + ':B', 'B:PA0')) r = -P.encoder(s);
+      if (sameNet(c.id + ':A', 'B:PA15') && sameNet(c.id + ':B', 'B:PB3')) r = P.encoder(s);
+      else if (sameNet(c.id + ':A', 'B:PB3') && sameNet(c.id + ':B', 'B:PA15')) r = -P.encoder(s);
     });
-    if (r === null) { sysWarn('encw', '엔코더 A→PA0(A0), B→PA1(A1)과 모터 전원 배선을 확인하세요.'); return 0; }
+    if (r === null) { sysWarn('encw', '엔코더 A→A15, B→B3과 모터 전원 배선을 확인하세요.'); return 0; }
     return r;
   },
   i2cReady(addr) {
@@ -156,6 +159,9 @@ const hw = {
   onIrq: k => { if (stats) stats.irq[k] = (stats.irq[k] || 0) + 1; }
 };
 
+/* ---------- 보드 LED(C13, LOW일 때 켜짐) ---------- */
+function ledOn() { const s = rt && rt.st.pins.PC13; return s && s.mode === 'out' && !s.out ? 1 : 0; }
+
 /* ---------- 소리 ---------- */
 let actx = null; const oscs = {};
 function audioInit() { if (!store.sound) return; try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume && actx.resume(); } catch (e) { actx = null; } }
@@ -172,10 +178,7 @@ function beep() {
   if (!actx || !store.sound) return;
   [0, .15, .3].forEach((d, i) => { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = 880 + i * 220; g.gain.value = .04; o.connect(g).connect(actx.destination); o.start(actx.currentTime + d); o.stop(actx.currentTime + d + .1); });
 }
-const sndBtn = $('#soundBtn');
-const paintSnd = () => { sndBtn.textContent = store.sound ? '소리 켬' : '소리 끔'; sndBtn.setAttribute('aria-pressed', store.sound); };
-sndBtn.onclick = () => { store.sound = !store.sound; save(); paintSnd(); if (store.sound) audioInit(); else silence(); };
-paintSnd();
+
 
 /* ---------- 3D 작업대 ---------- */
 const stage = $('#stage');
@@ -199,8 +202,10 @@ const scene = createScene(stage, {
     $('#info').innerHTML = txt;
   },
   onPress: (id, down) => {
-    if (id === 'B2') { b2 = down; if (down && rt) { serial('— RESET (B2) —\n', 'sys'); run(); } return; }
-    if (id === 'B1') b1 = down; else if (cs[id]) cs[id].pressed = down;
+    if (id in press) press[id] = down;
+    if (id === 'NRST') { if (down && rt) { serial('— RESET (NRST) —\n', 'sys'); run(); } return; }
+    if (id === 'BOOT0') { if (down) toast('BOOT0: 누른 채로 리셋하면 USB 부트로더(DFU) 모드로 들어가요'); return; }
+    if (id !== 'KEY' && cs[id]) cs[id].pressed = down;
     if (stats) { if (down) stats.presses++; stats.lastInput = now(); }
   },
   onAct: (id, dx, dy) => { const c = compOf(id); const P = c && PARTS[c.type]; if (P && P.act) P.act(cs[c.id], dx, dy); },
@@ -210,7 +215,8 @@ const scene = createScene(stage, {
     if (cur.sandbox) saveSandbox(); else (store.pos[cur.id] = store.pos[cur.id] || {})[c.id] = [X, Z];
     save();
   },
-  onDelete: id => removeComp(id)
+  onDelete: id => removeComp(id),
+  onHotspot: key => showHotspot(key)
 });
 document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => scene.view(b.dataset.view));
 window.__lab = { scene };
@@ -220,7 +226,7 @@ function lessonComps(l) {
   const pos = store.pos[l.id] || {};
   return l.comps.map(c => {
     const P = PARTS[c.type];
-    const X = (c.x - 410) * .2 + 45 + P.w / 2, Z = (c.y - 300) * .2 + P.d / 2;
+    const X = (c.x - 410) * .2 + 40 + P.w / 2, Z = (c.y - 300) * .2 + P.d / 2;
     return { ...c, name: c.name || P.label, X: pos[c.id] ? pos[c.id][0] : X, Z: pos[c.id] ? pos[c.id][1] : Z };
   });
 }
@@ -366,7 +372,7 @@ $('#rxForm').addEventListener('submit', e => {
 });
 
 /* ---------- 실행 ---------- */
-function setStatus(k, t) { const s = $('#status'); s.className = 'status ' + k; s.lastElementChild.textContent = t; }
+function setStatus(k, t) { const s = $('#status'); s.className = 'pill ' + k; s.lastElementChild.textContent = t; }
 function friendly(e) {
   const m = String(e && e.message || e); let r;
   if ((r = m.match(/^(\w+) is not defined/))) return `'${r[1]}'을(를) 찾을 수 없어요. 오타이거나 이 실습실이 지원하지 않는 함수/변수예요.`;
@@ -396,7 +402,7 @@ async function run() {
 function stop(silent) {
   if (rt) rt.stop();
   if (running && !silent) serial('■ 정지\n', 'sys');
-  rt = null; running = false; setStatus('', '대기'); silence();
+  rt = null; running = false; setStatus('', '정지됨'); silence();
 }
 $('#runBtn').onclick = run; $('#runBtn2').onclick = run; $('#stopBtn').onclick = () => stop();
 
@@ -409,10 +415,10 @@ function edge(key, on, t) {
 }
 function frame(t) {
   const dt = Math.min(.1, (t - lastT) / 1000); lastT = t;
-  const d2 = rt && rt.drive('PA5'); const l2 = d2 ? d2.level : 0;
+  const l2 = ledOn();
   if ((l2 > .5) !== ld2Lit) { ld2Lit = l2 > .5; edge('ld2', ld2Lit, t); }
   eachPart((c, P, s, io) => { try { P.step(c, s, io, dt, t); } catch (e) { console.error(e); } });
-  scene.render({ ld2: l2, b1, b2, parts: cs });
+  if (stage.parentElement && stage.parentElement.offsetParent !== null) scene.render({ led: l2, press, parts: cs });
   drawPlot();
   if (running && stats && !cur.sandbox && !store.done[cur.id]) {
     const wc = wireCheck();
@@ -426,51 +432,58 @@ function frame(t) {
 
 /* ---------- 패널 ---------- */
 function renderList() {
-  let sec = '', h = '';
-  LESSONS.forEach((l, i) => {
+  let sec = '', h = '', num = 0;
+  LESSONS.forEach(l => {
     if (l.sec !== sec) { sec = l.sec; h += `<li class="sec">${sec}</li>`; }
-    h += `<li class="${store.done[l.id] ? 'done' : ''}"><button data-id="${l.id}" aria-current="${l === cur}"><span class="n">${store.done[l.id] ? '✓' : l.sandbox ? '∞' : i + 1}</span><span><b>${l.title}</b><small>${l.tag}</small></span></button></li>`;
+    if (!l.sandbox) num++;
+    const d = store.done[l.id];
+    h += `<li class="${d ? 'done' : ''}"><a href="#${l.id}"><span class="n">${d ? '✓' : l.sandbox ? '∞' : num}</span><span><b>${l.title}</b><small>${l.tag}</small></span></a></li>`;
   });
   $('#lessonList').innerHTML = h;
-  const total = LESSONS.filter(l => !l.sandbox).length, n = LESSONS.filter(l => store.done[l.id]).length;
-  $('#progText').textContent = `${n} / ${total} 완료`;
-  $('#progBar').style.width = (n / total * 100) + '%';
+  const list = LESSONS.filter(l => !l.sandbox), n = list.filter(l => store.done[l.id]).length;
+  const next = list.find(l => !store.done[l.id]) || list[list.length - 1];
+  $('#progText').textContent = `${n}/${list.length}`;
+  $('#progBar').style.width = (n / list.length * 100) + '%';
+  $('#secName').textContent = next.sec;
+  $('#nextCard').innerHTML = `<span class="num">${list.indexOf(next) + 1}</span><div><small>${n ? '이어서 학습' : '첫 레슨'} · ${next.sec}</small><b>${next.title}</b></div><a class="btn primary" href="#${next.id}">시작</a>`;
 }
-$('#lessonList').addEventListener('click', e => { const b = e.target.closest('button'); if (b) location.hash = b.dataset.id; });
 function renderGoal() {
   const g = $('#goal'); g.classList.toggle('done', !!store.done[cur.id]);
   g.hidden = !!cur.sandbox;
   g.lastElementChild.textContent = (store.done[cur.id] ? '완료 — ' : '목표 — ') + (cur.goal ? cur.goal.text : '');
 }
 const pinRef = () => `<h3 class="sub">이 실습실의 주변장치 핀 배정</h3><table class="stack"><thead><tr><th>기능</th><th>핀</th><th>핸들 · 설정</th></tr></thead><tbody>
-  <tr><td>LD2 / B1</td><td>PA5 / PC13</td><td>보드 내장</td></tr>
-  <tr><td>USART2</td><td>PA2(D1) / PA3(D0)</td><td><code>huart2</code> 115200 8N1</td></tr>
-  <tr><td>ADC1</td><td>PA0 PA1 PA4 PB0 PC1 PC0</td><td><code>hadc1</code> 기본 채널 0(PA0)</td></tr>
-  <tr><td>TIM1 PWM 50Hz</td><td>PA8(D7) CH1 · PA9(D8) CH2</td><td><code>htim1</code> PSC 83, ARR 19999</td></tr>
-  <tr><td>TIM2 엔코더</td><td>PA0(A0) · PA1(A1)</td><td><code>htim2</code> 32bit, 4체배</td></tr>
-  <tr><td>TIM3 PWM 1kHz</td><td>PA6(D12) CH1 · PA7(D11) CH2 · PB0(A3) CH3</td><td><code>htim3</code> PSC 83, ARR 999</td></tr>
-  <tr><td>TIM4 PWM (부저)</td><td>PB6(D10) CH1</td><td><code>htim4</code> PSC 83 (1MHz)</td></tr>
+  <tr><td>보드 LED / KEY</td><td>C13 / A0</td><td>LED는 LOW일 때 켜짐, KEY는 누르면 LOW</td></tr>
+  <tr><td>USART2</td><td>A2 TX · A3 RX</td><td><code>huart2</code> 115200 8N1</td></tr>
+  <tr><td>ADC1</td><td>A0~A7, B0, B1</td><td><code>hadc1</code> 기본 채널 1(A1)</td></tr>
+  <tr><td>TIM1 PWM 50Hz</td><td>A8 CH1 · A9 CH2</td><td><code>htim1</code> PSC 99, ARR 19999</td></tr>
+  <tr><td>TIM2 엔코더</td><td>A15 CH1 · B3 CH2</td><td><code>htim2</code> 32bit, 4체배</td></tr>
+  <tr><td>TIM3 PWM 1kHz</td><td>A6 CH1 · A7 CH2 · B0 CH3 · B1 CH4</td><td><code>htim3</code> PSC 99, ARR 999</td></tr>
+  <tr><td>TIM4 PWM (부저)</td><td>B6 CH1 · B7 CH2</td><td><code>htim4</code> PSC 99 (1MHz)</td></tr>
   <tr><td>TIM5 µs 카운터</td><td>—</td><td><code>htim5</code> 1MHz 자유 카운트</td></tr>
   <tr><td>TIM11 주기 인터럽트</td><td>—</td><td><code>htim11</code> 10kHz, ARR 99 → 10ms</td></tr>
-  <tr><td>I2C1</td><td>PB8(D15) SCL · PB9(D14) SDA</td><td><code>hi2c1</code> 100kHz</td></tr></tbody></table>`;
+  <tr><td>I2C1</td><td>B8 SCL · B9 SDA</td><td><code>hi2c1</code> 100kHz</td></tr></tbody></table>`;
 function renderPinTab() {
   const { missing } = wireCheck(); let h;
   if (cur.sandbox) h = `<p>위쪽 <b>부품 추가</b>로 원하는 부품을 넣고, 부품 몸체를 끌어 옮기세요. 오른쪽 위 ×로 삭제합니다.</p>` + pinRef();
   else if (!cur.wiring.length) h = `<p>이 레슨은 배선이 필요 없어요. 보드에 내장된 부품을 씁니다.</p>` + pinRef();
   else h = `<table class="stack"><thead><tr><th>부품 단자</th><th>보드 핀</th><th>상태</th></tr></thead><tbody>` +
     cur.wiring.map(w => { const ok = !missing.includes(w); const [ca, cb] = w[0].startsWith('B:') ? [w[1], w[0]] : w; return `<tr><td>${termName(ca)}</td><td>${termName(cb)}</td><td class="st ${ok ? 'ok' : 'no'}">${ok ? '연결' : '—'}</td></tr>`; }).join('') +
-    `</tbody></table><p class="note">GND는 보드의 GND 핀 3개 중 아무거나 써도 돼요(보드 안에서 연결됨). 배선 힌트를 누르면 다음에 연결할 두 핀이 깜빡여요.</p>` + pinRef();
+    `</tbody></table><p class="note">G(GND) 핀 2개, 3.3·5V 핀 2개는 각각 보드 안에서 연결돼 있어 아무거나 써도 돼요. 배선 힌트를 누르면 다음에 연결할 두 핀이 깜빡여요.</p>` + pinRef();
   $('#p-pin').innerHTML = h;
 }
+const BOARD_SPEC = [
+  ['MCU', 'STM32F411CEU6 (UFQFPN48)'], ['코어', 'Arm Cortex-M4 + FPU, 최대 100MHz'], ['메모리', 'Flash 512KB · SRAM 128KB'],
+  ['ADC', '12bit 1개, 핀으로 나온 채널 10개 (A0~A7, B0, B1)'], ['타이머', 'TIM1(고급) · TIM2/TIM5(32bit) · TIM3/TIM4 · TIM9~11'],
+  ['통신', 'USART ×3 · I2C ×3 · SPI ×5 · USB OTG FS'], ['클럭', 'HSE 25MHz · LSE 32.768kHz'], ['보드', 'USB-C, KEY(A0)·NRST·BOOT0 버튼, C13 LED, 3.3V LDO'],
+  ['디버그', 'SWD 4핀 (3V3 · DIO · CLK · GND)'], ['크기', '약 53.3 × 20.8mm, 핀 간격 15.24mm(600mil)']
+];
 function renderSpec() {
   const row = r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`;
   $('#p-spec').innerHTML = (cur.spec ? `<h3 class="sub">이 레슨</h3><table><tbody>${cur.spec.map(row).join('')}</tbody></table>` : '') +
-  `<h3 class="sub">STM32F401RE · NUCLEO-F401RE</h3><table><tbody>${[
-    ['코어', 'Arm Cortex-M4 + FPU, 최대 84MHz'], ['메모리', 'Flash 512KB · SRAM 96KB'], ['ADC', '12bit 1개, 외부 16채널'],
-    ['타이머', 'TIM1(고급) · TIM2/TIM5(32bit) · TIM3/TIM4 · TIM9~11'], ['통신', 'USART ×3 · I2C ×3 · SPI ×4 · USB OTG FS'], ['동작 전압', 'MCU 1.7~3.6V, 보드 I/O 3.3V'],
-    ['디버거', 'ST-LINK/V2-1 내장 (드래그앤드롭 업로드, 가상 COM)'], ['커넥터', 'Arduino Uno V3 + ST morpho']].map(row).join('')}</tbody></table>
+  `<h3 class="sub">STM32F411CEU6 · Black Pill</h3><table><tbody>${BOARD_SPEC.map(row).join('')}</tbody></table>
   <h3 class="sub">시뮬레이터 범위</h3><p class="note">GPIO, EXTI 인터럽트, SysTick(HAL_Delay/GetTick), USART2 송수신(폴링·인터럽트), ADC1 폴링, TIM PWM·엔코더·주기 인터럽트·µs 카운터, I2C(LCD·OLED 장치), DHT11 드라이버를 지원해요. DMA, SPI, RTC, 저전력 모드, 워치독은 아직 없어요. C 문법은 자주 쓰는 부분만 변환하며, 정수 나눗셈은 실수로 계산될 수 있어요.</p>
-  <p class="note">참고: <a href="https://www.st.com/en/evaluation-tools/nucleo-f401re.html">ST NUCLEO-F401RE</a> · <a href="https://www.st.com/en/microcontrollers-microprocessors/stm32f401re.html">STM32F401RE 데이터시트</a> · <a href="https://github.com/afiskon/stm32-ssd1306">stm32-ssd1306 라이브러리</a></p>`;
+  <p class="note">참고: <a href="https://www.st.com/en/microcontrollers-microprocessors/stm32f411ce.html">ST STM32F411CE</a> · <a href="https://stm32-base.org/boards/STM32F411CEU6-WeAct-Black-Pill-V2.0">stm32-base Black Pill</a> · <a href="https://github.com/afiskon/stm32-ssd1306">stm32-ssd1306 라이브러리</a></p>`;
 }
 function selectTab(k) {
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === k));
@@ -505,24 +518,164 @@ $('#copyCode').onclick = async () => { try { await navigator.clipboard.writeText
 let toastT = 0;
 function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400); }
 
-/* ---------- 레슨 전환 ---------- */
-function openLesson(id) {
-  const l = LESSONS.find(l => l.id === id) || LESSONS[0];
+/* ---------- 레슨 열기 ---------- */
+function openLesson(l) {
   stop(true); stats = null; setPending(null);
   cur = l;
   for (const k in cs) delete cs[k];
-  $('#lTitle').textContent = l.title; $('#lTag').textContent = `${l.sec} · ${l.tag}`;
+  $('#lTitle').textContent = l.title;
+  const idx = LESSONS.filter(x => !x.sandbox).indexOf(l);
+  $('#lTag').textContent = `${l.sandbox ? '자유 실습' : '레슨 ' + (idx + 1)} · ${l.sec} · ${l.tag}`;
   $('#ovBody').innerHTML = l.overview;
   $('#palette').hidden = !l.sandbox;
   ta.value = store.code[l.id] || l.code; syncGutter();
-  renderLesson(); renderList(); renderGoal(); renderSpec();
-  $('#info').innerHTML = l.sandbox ? '부품을 추가하고 원하는 대로 배선해보세요. 부품 몸체를 끌면 옮겨져요.' : l.wiring.length ? '핀(금색 단자)을 누른 뒤 연결할 다른 핀을 누르면 점퍼선이 꽂혀요. 선을 누르면 뽑히고, 부품 몸체를 끌면 옮겨져요.' : '이 레슨은 배선 없이 보드 내장 LED·버튼을 씁니다. 실행을 눌러보세요.';
-  document.title = `${l.title} · STM32 실습실`;
+  scene.setBoard(true); scene.setHotspots(false);
+  renderLesson(); renderGoal(); renderSpec(); selectTab('ov');
+  $('#info').innerHTML = l.sandbox ? '부품을 추가하고 원하는 대로 배선해보세요. 부품 몸체를 끌면 옮겨져요.' : l.wiring.length ? '금색 핀을 누른 뒤 연결할 다른 핀을 누르면 점퍼선이 꽂혀요. 선을 누르면 뽑히고, 부품 몸체를 끌면 옮겨져요.' : '이 레슨은 배선 없이 보드의 C13 LED·KEY 버튼을 씁니다. 실행을 눌러보세요.';
+  document.title = `${l.title} · Learn STM32`;
   series.clear(); plotDirty = true; showView('mon'); scene.view('all');
-  const cb = document.querySelector('#lessonList [aria-current=true]'); if (cb) cb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
-window.addEventListener('hashchange', () => openLesson(location.hash.slice(1)));
 
-openLesson(location.hash.slice(1));
+/* ---------- 홈: 핫스팟 설명 ---------- */
+const HS_INFO = {
+  gpio: ['GPIO 핀', '#ff7a1a', '양쪽에 20개씩 모두 40핀이에요. 실크 인쇄의 A0·B5 같은 이름이 포트와 번호(PA0, PB5)예요. 대부분 5V를 견디는(FT) 핀이지만 ADC로 쓰는 핀에는 3.3V까지만 넣으세요.'],
+  mcu: ['STM32F411CEU6', '#e8b04a', 'Arm Cortex-M4F 코어, 최대 100MHz, Flash 512KB, SRAM 128KB. 48핀 QFN 패키지가 45° 돌아간 채로 실장돼 있어요.'],
+  usb: ['USB-C', '#5aa9ff', '전원(5V)과 MCU의 USB(PA11·PA12)가 함께 연결돼 있어요. BOOT0을 누른 채 리셋하면 USB DFU로 펌웨어를 올릴 수 있고, 코드로 USB 가상 COM(CDC)도 만들 수 있어요.'],
+  led: ['C13 LED', '#3fd1a5', '파란 사용자 LED는 PC13에 연결돼 있고 LOW를 출력하면 켜져요. 옆의 빨간 LED는 전원 표시등이에요.'],
+  key: ['KEY 버튼', '#ffcf5a', 'PA0에 연결된 사용자 버튼이에요. 누르면 PA0이 GND로 연결되므로 내부 풀업을 켜고 LOW를 눌림으로 읽어요.'],
+  reset: ['NRST · BOOT0', '#c58cff', 'NRST는 MCU를 리셋해요. BOOT0을 누른 채 NRST를 눌렀다 떼면 내장 부트로더로 들어가 USB로 펌웨어를 올릴 수 있어요.'],
+  xtal: ['25MHz 크리스털', '#d8cfc2', '외부 고속 클럭(HSE)이에요. PLL로 배수해 100MHz 시스템 클럭을 만들어요. 옆의 작은 부품은 RTC용 32.768kHz(LSE) 크리스털이에요.'],
+  power: ['3V3 · G · 5V', '#ff5a4e', '양쪽 끝에 5V, G(GND), 3.3V 핀이 있어요. 센서는 보통 3.3V, 서보·릴레이·초음파는 5V에 연결해요. 3.3V 레귤레이터는 수백 mA까지만 낼 수 있어요.'],
+  swd: ['SWD 디버그', '#8fd14f', '3V3·DIO(PA13)·CLK(PA14)·GND 4핀이에요. ST-LINK를 연결하면 펌웨어를 올리고 브레이크포인트로 디버깅할 수 있어요.']
+};
+function showHotspot(key) {
+  const [t, c, p] = HS_INFO[key]; const sh = $('#hsSheet');
+  sh.hidden = false; sh.style.setProperty('--c', c); sh.querySelector('i').style.background = c;
+  sh.querySelector('h3').textContent = t; sh.querySelector('p').textContent = p;
+}
+$('#hsSheet .x').onclick = () => { $('#hsSheet').hidden = true; };
+
+/* ---------- 부품 ---------- */
+const PART_INFO = {
+  led: ['저항이 내장된 5mm LED 모듈. +를 GPIO에, −를 G에 연결해요.', ['GPIO 출력', 'PWM 밝기']],
+  rgb: ['공통 캐소드 RGB LED. R·G·B 세 핀을 PWM으로 섞어 색을 만들어요.', ['TIM3 PWM 3채널']],
+  button: ['누르면 S가 HIGH가 되는 버튼 모듈(풀다운 내장).', ['GPIO 입력', 'EXTI']],
+  pot: ['10kΩ 가변저항. 가운데 단자(S) 전압이 0~3.3V로 바뀌어 ADC로 읽어요.', ['ADC1']],
+  buzzer: ['수동 부저. 넣어주는 PWM 주파수대로 음이 나요.', ['TIM4 PWM', '주파수 변경']],
+  dht11: ['온도·습도 센서. 데이터선 하나로 40비트를 보내요.', ['단선 통신', '1초 간격']],
+  seg7: ['공통 캐소드 7세그먼트. 세그먼트 a~g, dp를 각각 켜서 숫자를 표시해요.', ['GPIO 8개']],
+  oled: ['128×64 단색 OLED(SSD1306), I2C 주소 0x3C.', ['I2C1', '프레임버퍼']],
+  hcsr04: ['초음파 거리 센서. TRIG 10µs 펄스 → ECHO 펄스 폭으로 거리 계산.', ['5V', 'µs 타이머']],
+  servo: ['SG90 서보. 50Hz 펄스 폭 0.5~2.5ms로 0~180° 각도를 정해요.', ['TIM1 PWM 50Hz', '5V']],
+  relay: ['5V 릴레이 모듈과 램프. 작은 신호로 큰 전류를 켜고 꺼요.', ['GPIO 출력', '5V']],
+  lcd: ['16×2 문자 LCD + PCF8574 I2C 백팩, 주소 0x27.', ['I2C1', '5V']],
+  stepper: ['28BYJ-48 스텝 모터 + ULN2003 드라이버. 하프스텝 4096번에 1회전.', ['GPIO 4개', '5V']],
+  dcmotor: ['L298N H-브리지 + 엔코더 기어드 DC 모터(1320카운트/회전). 바퀴를 끌면 부하가 걸려요.', ['TIM3 PWM', 'TIM2 엔코더', 'PID']],
+  esc: ['BLDC 아웃러너 모터 + ESC. 서보처럼 50Hz 펄스(1000~2000µs)로 스로틀을 줘요.', ['TIM1 PWM 50Hz', '암(arming)']]
+};
+let curPart = 'dcmotor';
+function renderParts() {
+  $('#partGrid').innerHTML = Object.entries(PARTS).map(([k, P]) => `<button data-part="${k}" aria-pressed="${k === curPart}"><b>${P.label}</b><small>${P.terms.length}핀 · ${(PART_INFO[k] || ['', []])[1].join(' · ')}</small></button>`).join('');
+  const P = PARTS[curPart], [desc, tags] = PART_INFO[curPart];
+  const used = LESSONS.filter(l => l.comps.some(c => c.type === curPart));
+  $('#partInfo').innerHTML = `<h3>${P.label}</h3><p>${desc}</p><p class="note">단자: ${P.terms.map(t => t[0] === '-' ? '−' : t[0]).join(' · ')}</p>` +
+    (used.length ? `<p class="note">쓰는 레슨: ${used.map(l => `<a href="#${l.id}">${l.title}</a>`).join(' · ')}</p>` : '') +
+    `<div class="tags">${tags.map(t => `<span>${t}</span>`).join('')}</div>`;
+}
+$('#partGrid').addEventListener('click', e => { const b = e.target.closest('[data-part]'); if (!b) return; curPart = b.dataset.part; renderParts(); showPartScene(); });
+function showPartScene() {
+  const P = PARTS[curPart];
+  comps = [{ id: 'p1', type: curPart, name: P.label, color: 'red', X: 0, Z: 0 }];
+  for (const k in cs) delete cs[k];
+  cs.p1 = Object.assign(P.init(), { __t: curPart }); ios.p1 = makeIo(comps[0]);
+  TERMS.clear(); for (const [t] of P.terms) TERMS.add('p1:' + t);
+  scene.setBoard(false); scene.setHotspots(false); scene.setComps(comps, false); wires = []; rebuildNets(); scene.setWires([], wireColor);
+  scene.view('all');
+}
+
+/* ---------- 참고 ---------- */
+function renderRef() {
+  const rows = (arr) => arr.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('');
+  const hdr = side => BOARD.filter(p => p.side === side).map((p, i) => [i + 1, `<b>${p.lab}</b>`, p.kind === 'io' ? p.id : p.kind === 'pwr' ? '전원' : p.kind === 'gnd' ? '접지' : p.id === 'NRST' ? '리셋' : 'VBAT', AF[p.id] || '']);
+  $('#refBody').innerHTML = `
+  <div class="card"><h3>조작법</h3><table><tbody>${rows([['이동', '왼쪽 드래그 · W A S D'], ['회전', '오른쪽 드래그 · Q / E · 아래 툴바 ↺ ↻'], ['확대', '마우스 휠 · R / F · 툴바 − +'], ['시점 초기화', '툴바 나침반'], ['배선', '핀을 누르고 다른 핀을 누르기 · 선을 누르면 제거 · Esc 취소'], ['부품', '몸체를 끌어 이동 · 노브·바퀴·블록은 끌어서 조절'], ['실행', '실행 버튼 · Ctrl+Enter'], ['모바일', '한 손가락 이동 · 두 손가락 확대·회전']])}</tbody></table></div>
+  <div class="card"><h3>Black Pill 핀맵 — USB 쪽 줄 (B12 → 3.3)</h3><table class="stack"><thead><tr><th>#</th><th>표기</th><th>핀</th><th>주요 기능</th></tr></thead><tbody>${rows(hdr('N'))}</tbody></table></div>
+  <div class="card"><h3>Black Pill 핀맵 — 반대쪽 줄 (5V → VB)</h3><table class="stack"><thead><tr><th>#</th><th>표기</th><th>핀</th><th>주요 기능</th></tr></thead><tbody>${rows(hdr('F'))}</tbody></table></div>
+  <div class="card">${pinRef()}</div>
+  <div class="card"><h3>자주 쓰는 HAL 함수</h3><table><tbody>${rows([
+    ['<code>HAL_GPIO_WritePin(port, pin, state)</code>', '핀 출력'], ['<code>HAL_GPIO_ReadPin(port, pin)</code>', '핀 읽기'], ['<code>HAL_GPIO_TogglePin(port, pin)</code>', '출력 반전'],
+    ['<code>HAL_Delay(ms)</code> · <code>HAL_GetTick()</code>', '지연 · 경과 시간'], ['<code>HAL_ADC_Start/PollForConversion/GetValue</code>', 'ADC 읽기'],
+    ['<code>HAL_TIM_PWM_Start</code> · <code>__HAL_TIM_SET_COMPARE</code>', 'PWM 시작 · 듀티'], ['<code>HAL_TIM_Base_Start_IT</code>', '주기 인터럽트'],
+    ['<code>HAL_TIM_Encoder_Start</code> · <code>__HAL_TIM_GET_COUNTER</code>', '엔코더'], ['<code>HAL_UART_Transmit</code> · <code>HAL_UART_Receive_IT</code>', 'UART 송수신'],
+    ['<code>HAL_I2C_IsDeviceReady</code>', 'I2C 장치 확인'], ['<code>HAL_NVIC_EnableIRQ(IRQn)</code>', '인터럽트 켜기']])}</tbody></table></div>
+  <div class="card"><h3>보드 사양</h3><table><tbody>${rows(BOARD_SPEC)}</tbody></table>
+  <p class="note">참고 자료: <a href="https://www.st.com/en/microcontrollers-microprocessors/stm32f411ce.html">ST STM32F411CE</a> · <a href="https://stm32-base.org/boards/STM32F411CEU6-WeAct-Black-Pill-V2.0">stm32-base Black Pill</a> · <a href="https://github.com/dbtn259/learn-stm32">이 사이트 저장소</a></p></div>`;
+}
+
+/* ---------- 설정 ---------- */
+function renderSettings() {
+  const sw = (k, on) => `<button class="switch" role="switch" data-set="${k}" aria-checked="${!!on}"></button>`;
+  $('#setBody').innerHTML = `
+  <div class="setrow"><div><b>소리</b><small>부저·ESC 소리를 스피커로 내요</small></div>${sw('sound', store.sound)}</div>
+  <div class="setrow"><div><b>고화질 그래픽</b><small>그림자·해상도를 높여요. 느리면 끄세요</small></div>${sw('hq', store.hq !== false)}</div>
+  <div class="setrow"><div><b>진행 기록 지우기</b><small>완료한 레슨 표시를 모두 지워요</small></div><button class="btn sm" data-act="resetDone">지우기</button></div>
+  <div class="setrow"><div><b>코드·배선 초기화</b><small>고친 코드, 꽂은 선, 옮긴 부품을 처음으로 돌려요</small></div><button class="btn sm" data-act="resetWork">초기화</button></div>`;
+}
+$('#setBody').addEventListener('click', e => {
+  const s = e.target.closest('[data-set]'), a = e.target.closest('[data-act]');
+  if (s) {
+    const k = s.dataset.set; store[k] = !(k === 'hq' ? store.hq !== false : store[k]); save(); renderSettings();
+    if (k === 'sound') { if (store.sound) audioInit(); else silence(); }
+    if (k === 'hq') scene.quality(store.hq !== false);
+  }
+  if (a) {
+    if (a.dataset.armed !== '1') { a.dataset.armed = '1'; a.textContent = '한 번 더 누르세요'; setTimeout(() => { a.dataset.armed = ''; renderSettings(); }, 3000); return; }
+    if (a.dataset.act === 'resetDone') store.done = {};
+    else { store.code = {}; store.wires = {}; store.pos = {}; store.sandbox = null; }
+    save(); renderSettings(); renderList(); toast('초기화했어요');
+  }
+});
+
+/* ---------- 라우팅 ---------- */
+const VIEWERS = { home: '#homeViewer', lesson: '#lessonViewer', parts: '#partsViewer' };
+let curView = '';
+function route() {
+  const h = location.hash.slice(1) || 'home';
+  const lesson = LESSONS.find(l => l.id === h);
+  const view = lesson ? 'lesson' : ['home', 'lessons', 'parts', 'ref', 'settings'].includes(h) ? h : 'home';
+  if (curView === 'lesson' && (view !== 'lesson' || lesson !== cur)) stop(true);
+  curView = view;
+  document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== 'v-' + view);
+  document.querySelectorAll('.tabbar a').forEach(a => a.setAttribute('aria-current', a.dataset.nav === (view === 'lesson' ? 'lessons' : view) ? 'page' : 'false'));
+  if (VIEWERS[view]) { $(VIEWERS[view]).append(stage); scene.mount(stage); }
+  if (view === 'home') {
+    comps = []; wires = []; TERMS.clear(); for (const p of BOARD_PINS) TERMS.add('B:' + p.id); rebuildNets();
+    scene.setBoard(true); scene.setComps([], false); scene.setWires([], wireColor); scene.setHotspots(true); scene.view('home');
+    document.title = 'Learn STM32';
+  } else if (view === 'parts') { renderParts(); showPartScene(); document.title = '부품 · Learn STM32'; }
+  else if (view === 'lesson') openLesson(lesson);
+  else if (view === 'ref') { renderRef(); document.title = '참고 · Learn STM32'; }
+  else if (view === 'settings') { renderSettings(); document.title = '설정 · Learn STM32'; }
+  else document.title = '레슨 · Learn STM32';
+  scrollTo(0, 0);
+}
+addEventListener('hashchange', route);
+document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => {
+  const k = b.dataset.cam;
+  if (k === 'rl') scene.rotate(1); else if (k === 'rr') scene.rotate(-1); else if (k === 'zi') scene.zoom(.75); else if (k === 'zo') scene.zoom(1.33);
+  else scene.view(curView === 'home' ? 'home' : 'all');
+});
+
+/* ---------- 시계 ---------- */
+function tickClock() {
+  const d = new Date();
+  $('#clkDate').textContent = `${d.getMonth() + 1}월 ${d.getDate()}, ${d.getFullYear()}`;
+  $('#clkTime').textContent = d.toTimeString().slice(0, 8);
+}
+setInterval(tickClock, 1000); tickClock();
+
+scene.quality(store.hq !== false);
+renderList();
+route();
 requestAnimationFrame(frame);
 }
