@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STM32 실습실</title>
+<meta name="description" content="NUCLEO-F401RE 가상 보드에서 배선하고 HAL 코드를 실행해보는 STM32 입문 실습">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="chip-mcu" aria-hidden="true"><i></i></div>
+    <div>
+      <h1>STM32 실습실</h1>
+      <p>NUCLEO-F401RE 가상 보드에서 배선하고 HAL 코드를 실행해보세요</p>
+    </div>
+  </div>
+  <div class="prog"><span id="progText">0 / 0 완료</span><div class="bar"><span id="progBar"></span></div></div>
+</header>
+
+<div class="app">
+  <nav class="lessons card" aria-label="레슨 목록">
+    <h2>레슨</h2>
+    <ol id="lessonList"></ol>
+  </nav>
+
+  <main class="bench">
+    <section class="card">
+      <div class="toolbar">
+        <button class="btn primary" id="runBtn" title="실행 (Ctrl+Enter)"><svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>실행</button>
+        <button class="btn" id="stopBtn"><svg viewBox="0 0 14 14"><rect x="2.5" y="2.5" width="9" height="9" rx="1" fill="currentColor"/></svg>정지</button>
+        <span class="status" id="status"><i></i><span>대기</span></span>
+        <span class="spacer"></span>
+        <span class="wirechip" id="wireChip">배선 없음</span>
+        <button class="btn" id="hintBtn">배선 힌트</button>
+        <button class="btn" id="clearBtn">전선 지우기</button>
+      </div>
+      <div class="stage">
+        <svg id="svg" viewBox="0 0 880 670" role="img" aria-label="NUCLEO-F401RE 보드와 부품 작업대">
+          <defs>
+            <radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".35" stop-color="currentColor" stop-opacity=".7"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient>
+          </defs>
+          <g id="gBoard"></g><g id="gComps"></g><g id="gWires"></g><g id="gTerms"></g>
+          <path id="rubber" class="rubber" d=""/>
+        </svg>
+      </div>
+      <div class="info" id="info">핀을 누른 뒤 연결할 다른 핀을 누르면 전선이 생겨요. 전선을 누르면 지워집니다.</div>
+    </section>
+
+    <section class="card serial">
+      <header><b>시리얼 모니터</b><span>USART2 · 115200 bps · ST-LINK 가상 COM</span><button class="btn" id="clrSerial">지우기</button></header>
+      <pre id="out" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <section class="panel card" aria-label="레슨 설명">
+    <div class="ph"><small id="lTag"></small><h2 id="lTitle"></h2></div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="ov" aria-selected="true">개요</button>
+      <button class="tab" role="tab" data-tab="pin" aria-selected="false">핀맵</button>
+      <button class="tab" role="tab" data-tab="code" aria-selected="false">예제 코드</button>
+      <button class="tab" role="tab" data-tab="spec" aria-selected="false">사양</button>
+    </div>
+    <div class="pane" id="p-ov"><div class="goal" id="goal"><i></i><span></span></div><div id="ovBody"></div></div>
+    <div class="pane" id="p-pin" hidden></div>
+    <div class="pane" id="p-code" hidden>
+      <div class="edbar">
+        <button class="btn primary" id="runBtn2"><svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>실행</button>
+        <button class="btn" id="resetCode">예제로 되돌리기</button>
+        <button class="btn" id="copyCode">복사</button>
+      </div>
+      <div class="editor"><pre class="gutter" id="gutter">1</pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="C 코드 편집기"></textarea></div>
+      <p class="hintline">Ctrl+Enter 실행 · 고친 코드는 이 브라우저에 자동 저장돼요 · STM32 HAL의 일부 함수만 지원합니다</p>
+    </div>
+    <div class="pane" id="p-spec" hidden></div>
+  </section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="js/lessons.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
