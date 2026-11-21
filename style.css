@@ -48,10 +48,10 @@ code,kbd{font-family:var(--mono);font-size:.88em;background:var(--soft);border:1
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
 
 /* 레슨 목록 */
-.lessons{padding:8px;position:sticky;top:14px}
+.lessons{padding:8px;position:sticky;top:14px;max-height:calc(100vh - 28px);overflow:auto}
 .lessons h2{font-size:12px;color:var(--muted);margin:6px 8px 6px;font-weight:600}
 .lessons ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.lessons button{width:100%;display:grid;grid-template-columns:26px 1fr 16px;gap:8px;align-items:center;text-align:left;background:none;border:0;border-radius:8px;padding:8px;cursor:pointer;min-height:44px}
+.lessons button{width:100%;display:grid;grid-template-columns:26px 1fr;gap:8px;align-items:center;text-align:left;background:none;border:0;border-radius:8px;padding:8px;cursor:pointer;min-height:44px}
 .lessons button:hover{background:var(--soft)}
 .lessons button[aria-current=true]{background:var(--soft);box-shadow:inset 3px 0 0 var(--accent)}
 .lessons .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;border:1.5px solid var(--line);color:var(--muted)}
@@ -105,9 +105,22 @@ code,kbd{font-family:var(--mono);font-size:.88em;background:var(--soft);border:1
 .serial{overflow:hidden}
 .serial header{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:13px}
 .serial header b{font-weight:700}
-.serial header span{color:var(--muted)}
+.sinfo{color:var(--muted)}
+.stabs{display:flex;gap:2px}
+.stab{background:none;border:0;padding:6px 10px;border-radius:6px;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;min-height:34px}
+.stab[aria-selected=true]{background:var(--soft);color:var(--ink)}
+#plot{display:block;width:100%;height:220px;background:#0b0f12}
+.rx{display:flex;gap:8px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line)}
+.rx input{flex:1;min-height:38px;border:1px solid var(--line);border-radius:8px;padding:0 10px;font:15px var(--mono);background:var(--soft);color:var(--ink)}
+.rx select,.palette select{min-height:38px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px;padding:0 8px}
+.palette{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);font-size:14px}
+.palette .note{margin-left:4px}
+.lcd{font:600 17px var(--mono);fill:#1d2a0c;letter-spacing:.5px}
+.del{cursor:pointer}
+.lessons li.sec{font-size:12px;font-weight:700;color:var(--muted);padding:12px 8px 4px}
+.lessons li.sec:first-child{padding-top:4px}
 .serial header .btn{min-height:30px;padding:0 10px;font-size:12px;margin-left:auto}
-#out{margin:0;height:180px;overflow:auto;background:#0b0f12;color:#d6e2ea;font:13px/1.5 var(--mono);padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere;border-radius:0 0 12px 12px}
+#out{margin:0;height:220px;overflow:auto;background:#0b0f12;color:#d6e2ea;font:13px/1.5 var(--mono);padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere;}
 #out .sys{color:#7f8c97}#out .warn{color:#ffcc4d}#out .err{color:#ff7a6e}
 
 /* 매뉴얼 패널 */
@@ -150,13 +163,14 @@ h3.sub{font-size:13px;color:var(--muted);margin:18px 0 4px;font-weight:600}
 
 @media (max-width:1180px){
   .app{grid-template-columns:minmax(0,1fr) minmax(340px,400px)}
-  .lessons{grid-column:1/-1;position:static}
+  .lessons{grid-column:1/-1;position:static;max-height:none}
   .lessons ol{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  .lessons li.sec{display:none}
   .lessons li{flex:none;width:210px}
   .lessons h2{display:none}
 }
 @media (max-width:860px){
-  .serial header span{display:none}
+  .sinfo{display:none}
   .app{grid-template-columns:minmax(0,1fr);padding:10px;gap:10px}
   .panel{position:static;max-height:none}
   .editor{height:420px}
