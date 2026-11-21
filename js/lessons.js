@@ -73,7 +73,7 @@ void MX_GPIO_Init(void)
   code: `#include "main.h"
 
 #define LED_PORT  GPIOB
-#define LED_PIN   GPIO_PIN_5   // 
+#define LED_PIN   GPIO_PIN_5   // B5
 
 void MX_GPIO_Init(void);
 
@@ -189,7 +189,7 @@ int main(void)
 
   while (1)
   {
-    GPIO_PinState btn = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10);  // 
+    GPIO_PinState btn = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, btn);                 // B5 LED
   }
 }
@@ -525,7 +525,7 @@ int main(void)
   char msg[64];
   int count = 0;
 
-  sprintf(msg, "Hello, STM32F401!\\r\\n");
+  sprintf(msg, "Hello, STM32F411!\\r\\n");
   HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
 
   while (1)
@@ -761,9 +761,9 @@ int main(void)
 #include <stdio.h>
 
 #define TRIG_PORT GPIOA
-#define TRIG_PIN  GPIO_PIN_9    // 
+#define TRIG_PIN  GPIO_PIN_9
 #define ECHO_PORT GPIOA
-#define ECHO_PIN  GPIO_PIN_8    // 
+#define ECHO_PIN  GPIO_PIN_8
 
 void MX_GPIO_Init(void);
 
@@ -854,7 +854,7 @@ int main(void)
 
   while (1)
   {
-    DHT11_Data d = DHT11_Read(GPIOA, GPIO_PIN_10);   // 
+    DHT11_Data d = DHT11_Read(GPIOA, GPIO_PIN_10);
     if (d.ok)
       printf("temp:%d,humi:%d\\r\\n", d.Temperature, d.Humidity);
     else
@@ -1630,9 +1630,9 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
 
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Pin = GPIO_PIN_13;             // 보드 LED (C13)
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 }
 `
 }

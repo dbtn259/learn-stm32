@@ -1,4 +1,4 @@
-// 3D 작업대: NUCLEO-F401RE(실측 치수 기반 모델링), 부품, 점퍼선, 조작
+// 3D 작업대: Black Pill STM32F411CEU6(실측 치수 기반 모델링), 부품, 점퍼선, 조작
 import * as THREE from 'three';
 import { OrbitControls } from '../vendor/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from '../vendor/CSS2DRenderer.js';
@@ -388,10 +388,14 @@ export function createScene(host, cb) {
   const compRoot = new THREE.Group(); scene.add(compRoot);
   const built = new Map();
   function clearComps() {
-    for (const [id, b] of built) { b.group.traverse(o => { if (o.isCSS2DObject) o.element.remove(); }); compRoot.remove(b.group); }
+    // 레이캐스트 목록에서 먼저 빼고(부모 연결이 살아 있을 때) 장면에서 제거
+    for (let i = pick.length - 1; i >= 0; i--) { let p = pick[i]; while (p && p !== compRoot) p = p.parent; if (p === compRoot) pick.splice(i, 1); }
+    for (const [id, b] of built) {
+      b.group.traverse(o => { if (o.isCSS2DObject) o.element.remove(); if (o.isMesh && !o.geometry.userData.shared) o.geometry.dispose(); });
+      compRoot.remove(b.group);
+    }
     built.clear();
-    for (const [id, o] of [...termObjs]) if (!id.startsWith('B:')) { termObjs.delete(id); }
-    for (let i = pick.length - 1; i >= 0; i--) { const m = pick[i]; let p = m; while (p && p !== compRoot) p = p.parent; if (p === compRoot) pick.splice(i, 1); }
+    for (const id of [...termObjs.keys()]) if (!id.startsWith('B:')) termObjs.delete(id);
   }
   function setComps(comps, sandbox) {
     clearComps();
@@ -414,11 +418,11 @@ export function createScene(host, cb) {
 
   /* ---------- 점퍼선 ---------- */
   const wireRoot = new THREE.Group(); scene.add(wireRoot);
-  const housingGeo = new THREE.BoxGeometry(2.5, 14, 2.5);
+  const housingGeo = new THREE.BoxGeometry(2.5, 14, 2.5); housingGeo.userData.shared = true;
   let wireList = [];
   function setWires(wires, colorOf) {
     wireList = wires;
-    for (const m of [...wireRoot.children]) { wireRoot.remove(m); m.traverse(o => { if (o.isMesh) { o.geometry.dispose(); const i = pick.indexOf(o); if (i >= 0) pick.splice(i, 1); } }); }
+    for (const m of [...wireRoot.children]) { wireRoot.remove(m); m.traverse(o => { if (o.isMesh) { if (o.geometry !== housingGeo) o.geometry.dispose(); if (o.material !== MAT.black) o.material.dispose(); const i = pick.indexOf(o); if (i >= 0) pick.splice(i, 1); } }); }
     wires.forEach(([a, b], i) => {
       const A = anchors.get(a), Bp = anchors.get(b); if (!A || !Bp) return;
       const col = colorOf(a, b, i), mat = M(col, { roughness: .45 });
@@ -553,5 +557,5 @@ export function createScene(host, cb) {
 
   function screenPos(id) { const a = anchors.get(id); if (!a) return null; const v = a.clone().project(camera); const r = el.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; }
   function objPos(fn) { let r = null; scene.traverse(o => { if (!r && o.isMesh && fn(o.userData)) { const v = o.getWorldPosition(new THREE.Vector3()).project(camera); const b = el.getBoundingClientRect(); r = { x: b.left + (v.x + 1) / 2 * b.width, y: b.top + (1 - v.y) / 2 * b.height }; } }); return r; }
-  return { setComps, setWires, setPending, highlight, render, view, refreshAnchors, anchors, resize, screenPos, objPos, mount, setBoard, setHotspots, rotate, zoom, quality };
+  return { setComps, setWires, setPending, highlight, render, view, refreshAnchors, anchors, resize, screenPos, objPos, mount, setBoard, setHotspots, rotate, zoom, quality, _pick: pick, _project: (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); const r = el.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; } };
 }

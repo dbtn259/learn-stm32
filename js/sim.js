@@ -1,4 +1,4 @@
-// C(HAL) 부분집합 → JavaScript 변환기 + STM32F401 가상 주변장치
+// C(HAL) 부분집합 → JavaScript 변환기 + STM32F411 가상 주변장치
 (function () {
 'use strict';
 
@@ -208,11 +208,15 @@ function insertTicks(c) {
     let i = m.index + m[0].length, depth = 1;
     while (i < c.length && depth) { if (c[i] === '(') depth++; else if (c[i] === ')') depth--; i++; }
     let j = i; while (/\s/.test(c[j] || '')) j++;
-    if (c[j] === '{') edits.push([j + 1, 0, ' await __tick();']);
-    else if (c[j] === ';' && m[1] === 'while') {
-      let k = m.index - 1; while (k >= 0 && /\s/.test(c[k])) k--;
-      if (c[k] !== '}') edits.push([j, 1, '{ await __tick(); }']);
+    if (c[j] === '{') { edits.push([j + 1, 0, ' await __tick();']); continue; }
+    if (c[j] === ';') {
+      if (m[1] === 'while') { let k = m.index - 1; while (k >= 0 && /\s/.test(c[k])) k--; if (c[k] === '}') continue; }  // do { } while(); 의 끝
+      edits.push([j, 1, '{ await __tick(); }']); continue;
     }
+    // 중괄호 없는 한 줄 본문: 단순 문장이면 블록으로 감싸 양보 지점을 넣는다
+    if (/^(if|for|while|switch|do|else)\b/.test(c.slice(j))) continue;
+    const e = exprEnd(c, j);
+    if (c[e] === ';') { edits.push([e + 1, 0, ' }']); edits.push([j, 0, '{ await __tick(); ']); }
   }
   edits.sort((a, b) => b[0] - a[0]);
   for (const [p, d, t] of edits) c = c.slice(0, p) + t + c.slice(p + d);
