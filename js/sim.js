@@ -3,16 +3,45 @@
 'use strict';
 
 /* ---------- 1. 변환기 ---------- */
-const TYPES = ['GPIO_InitTypeDef', 'GPIO_TypeDef', 'ADC_ChannelConfTypeDef', 'TIM_OC_InitTypeDef', 'TIM_HandleTypeDef',
-  'UART_HandleTypeDef', 'I2C_HandleTypeDef', 'ADC_HandleTypeDef', 'GPIO_PinState', 'HAL_StatusTypeDef', 'FontDef',
-  'SSD1306_COLOR', 'DHT11_Data', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'int8_t', 'int16_t', 'int32_t',
-  'int64_t', 'size_t', 'unsigned\\s+long', 'unsigned\\s+int', 'unsigned\\s+char', 'unsigned',
-  'long', 'short', 'float', 'double', 'char', 'bool', 'int'];
-const T = '(?:' + TYPES.join('|') + ')';
-const TV = '(?:' + TYPES.join('|') + '|void)';
-const MOD = '(?:(?:static|const|volatile|inline|extern)\\s+)*';
+const BASE_STRUCT = ['GPIO_InitTypeDef', 'ADC_ChannelConfTypeDef', 'TIM_OC_InitTypeDef', 'DHT11_Data', 'FontDef'];
+const HANDLE_T = ['GPIO_TypeDef', 'TIM_HandleTypeDef', 'UART_HandleTypeDef', 'I2C_HandleTypeDef', 'ADC_HandleTypeDef'];
+// 정수형 → 잘라내기 함수
+const INT_T = [['uint8_t', '__u8'], ['uint16_t', '__u16'], ['uint32_t', '__u32'], ['uint64_t', '__s32'], ['int8_t', '__s8'], ['int16_t', '__s16'],
+  ['int32_t', '__s32'], ['int64_t', '__s32'], ['size_t', '__u32'], ['unsigned\\s+long', '__u32'], ['unsigned\\s+int', '__u32'], ['unsigned\\s+char', '__u8'],
+  ['unsigned\\s+short', '__u16'], ['unsigned', '__u32'], ['long\\s+long', '__s32'], ['long', '__s32'], ['short', '__s16'], ['char', '__s8'], ['bool', '__b'], ['int', '__s32'],
+  ['GPIO_PinState', '__s32'], ['HAL_StatusTypeDef', '__s32'], ['SSD1306_COLOR', '__s32']];
+const FLOAT_T = ['float', 'double'];
+const MOD = '(?:(?:static|const|volatile|inline|extern|register)\\s+)*';
 const PTR = '(?:\\s*\\*\\s*|\\s+)';
-const KW = new Set(['if', 'while', 'for', 'switch', 'return', 'function', 'catch', 'typeof', 'await', 'do', 'else', 'case']);
+const KW = new Set(['if', 'while', 'for', 'switch', 'return', 'function', 'catch', 'typeof', 'await', 'do', 'else', 'case', 'async']);
+const esc = s => s.replace(/\\\\s\+/g, ' ');
+
+// 식 하나의 끝 찾기: 깊이 0에서 ; , 또는 닫는 괄호
+function exprEnd(c, i) {
+  let d = 0;
+  for (; i < c.length; i++) {
+    const ch = c[i];
+    if (ch === '(' || ch === '[' || ch === '{') d++;
+    else if (ch === ')' || ch === ']' || ch === '}') { if (d === 0) return i; d--; }
+    else if ((ch === ';' || ch === ',') && d === 0) return i;
+  }
+  return i;
+}
+// 캐스트 뒤 피연산자 끝 찾기
+function operandEnd(c, i) {
+  while (/\s/.test(c[i] || '')) i++;
+  if ('-+!~'.includes(c[i])) return operandEnd(c, i + 1);
+  const close = j => { let d = 0; for (; j < c.length; j++) { if ('([{'.includes(c[j])) d++; else if (')]}'.includes(c[j])) { d--; if (!d) return j + 1; } } return j; };
+  if (c[i] === '(') i = close(i);
+  else { const m = /^[A-Za-z_]\w*|^\d+(?:\.\d+)?(?:[eE][-+]?\d+)?|^0[xX][0-9a-fA-F]+/.exec(c.slice(i)); if (!m) return i; i += m[0].length; }
+  for (;;) {
+    const m = /^\s*(\.|\[|\()/.exec(c.slice(i)); if (!m) break;
+    const j = i + m[0].length - 1;
+    if (c[j] === '.') { const n = /^\.\s*[A-Za-z_]\w*/.exec(c.slice(j)); if (!n) break; i = j + n[0].length; }
+    else i = close(j);
+  }
+  return i;
+}
 
 function transpile(src) {
   const lits = [];
@@ -23,12 +52,64 @@ function transpile(src) {
     else lits.push(m);
     return '__L' + (lits.length - 1) + '__';
   });
+  if (/\(\s*\*\s*[A-Za-z_]\w*\s*\)|[;{}]\s*\*\s*[A-Za-z_]\w*\s*(?:=[^=]|\+\+|--|[-+*/]=)/.test(code))
+    throw new SyntaxError('포인터 역참조(*p)는 이 실습실에서 지원하지 않아요. 값을 돌려받으려면 return이나 전역 변수·배열을 쓰세요');
+  // 전처리기
   code = code
+    .replace(/\\\n/g, ' ')
     .replace(/^[ \t]*#\s*include[^\n]*/gm, '')
+    .replace(/^[ \t]*#\s*define[ \t]+([A-Za-z_]\w*)\(([^)]*)\)[ \t]+([^\n]+)/gm, 'const $1 = async ($2) => ($3);')
     .replace(/^[ \t]*#\s*define[ \t]+([A-Za-z_]\w*)[ \t]+([^\n]+)/gm, 'const $1 = $2;')
     .replace(/^[ \t]*#\s*define[ \t]+([A-Za-z_]\w*)[ \t]*$/gm, 'const $1 = 1;')
-    .replace(/^[ \t]*#[^\n]*/gm, '')
-    .replace(new RegExp('(?<![\\w\\])\\]]\\s*)\\(\\s*(?:const\\s+)?(?:volatile\\s+)?' + TV + '\\s*\\*?\\s*\\)', 'g'), '')
+    .replace(/^[ \t]*#[^\n]*/gm, '');
+  // enum → 상수, struct 정의 → 타입 등록
+  const userStruct = [], userEnum = [];
+  const enumConsts = body => { let v = -1; return body.split(',').map(s => s.trim()).filter(Boolean).map(s => { const m = s.match(/^([A-Za-z_]\w*)\s*(?:=\s*(.+))?$/); if (!m) return ''; v = m[2] !== undefined ? `(${m[2]})` : `(${v}) + 1`; const r = `const ${m[1]} = ${v};`; v = m[1]; return r; }).join(' '); };
+  code = code
+    .replace(/typedef\s+enum\s*\w*\s*\{([^}]*)\}\s*([A-Za-z_]\w*)\s*;/g, (m, b, n) => { userEnum.push(n); return enumConsts(b); })
+    .replace(/\benum\s*(\w*)\s*\{([^}]*)\}\s*;/g, (m, n, b) => { if (n) userEnum.push(n); return enumConsts(b); })
+    .replace(/typedef\s+struct\s*\w*\s*\{[^}]*\}\s*([A-Za-z_]\w*)\s*;/g, (m, n) => { userStruct.push(n); return ''; })
+    .replace(/\bstruct\s+([A-Za-z_]\w*)\s*\{[^}]*\}\s*;/g, (m, n) => { userStruct.push(n); return ''; })
+    .replace(/\b(?:struct|enum)\s+([A-Za-z_]\w*)/g, '$1');
+  const STRUCT = [...BASE_STRUCT, ...userStruct];
+  const INTS = [...INT_T, ...userEnum.map(n => [n, '__s32'])];
+  const ALL = [...INTS.map(x => x[0]), ...FLOAT_T, ...STRUCT, ...HANDLE_T];
+  const T = '(?:' + ALL.join('|') + ')', TV = '(?:' + ALL.join('|') + '|void)';
+  const fnOf = t => { t = t.replace(/\s+/g, ' '); for (const [k, f] of INTS) if (new RegExp('^' + k + '$').test(t)) return f; return null; };
+  const isStruct = t => STRUCT.includes(t);
+
+  // 함수 안 static 변수 → 전역으로 끌어올림(이름 충돌 방지 위해 접미사)
+  {
+    const hoisted = []; let out = '', i = 0, n = 0;
+    const re = new RegExp('(?:async\\s+function|' + TV + PTR + ')\\s*[A-Za-z_]\\w*\\s*\\([^)]*\\)\\s*\\{', 'g');
+    let m;
+    while ((m = re.exec(code))) {
+      if (m.index < i) continue;
+      let j = m.index + m[0].length, d = 1;
+      while (j < code.length && d) { if (code[j] === '{') d++; else if (code[j] === '}') d--; j++; }
+      let body = code.slice(m.index, j);
+      const sre = new RegExp('\\bstatic\\s+(?:(?:const|volatile)\\s+)*(' + T + ')' + PTR + '([A-Za-z_]\\w*)([^;]*);', 'g');
+      body = body.replace(sre, (s, t, name, rest) => { const nn = name + '__s' + (++n); hoisted.push(`${t} ${nn}${rest};`); return `\u0001${name}\u0002${nn}\u0003`; });
+      body.replace(/\u0001(\w+)\u0002(\w+)\u0003/g, (s, a, b) => { body = body.replace(new RegExp('(?<![.\\w])' + a + '\\b', 'g'), b); });
+      body = body.replace(/\u0001\w+\u0002\w+\u0003/g, '');
+      out += code.slice(i, m.index) + body; i = j; re.lastIndex = j;
+    }
+    code = hoisted.join('\n') + '\n' + out + code.slice(i);
+  }
+
+  // 캐스트: 정수형은 잘라내기 함수로, 실수·포인터는 제거
+  {
+    const re = new RegExp('\\(\\s*(?:const\\s+)?(?:volatile\\s+)?(' + TV + ')\\s*(\\*)?\\s*\\)(?=\\s*[\\w(!~\\-+])', 'g');
+    let m, guard = 0;
+    while ((m = re.exec(code)) && guard++ < 5000) {
+      const f = !m[2] && fnOf(m[1]);
+      const s = m.index, e = m.index + m[0].length;
+      if (f) { const oe = operandEnd(code, e); code = code.slice(0, s) + f + '(' + code.slice(e, oe) + ')' + code.slice(oe); }
+      else code = code.slice(0, s) + code.slice(e);
+      re.lastIndex = s;
+    }
+  }
+  code = code
     .replace(/\b(0[xX][0-9a-fA-F]+)[uUlL]+\b/g, '$1')
     .replace(/\b(\d+(?:\.\d+)?)[uUlLfF]+\b/g, '$1')
     .replace(/->/g, '.')
@@ -37,19 +118,85 @@ function transpile(src) {
       const ps = params.split(',').map(p => p.trim()).filter(p => p && p !== 'void')
         .map(p => (p.match(/([A-Za-z_]\w*)\s*(?:\[\s*\w*\s*\])?$/) || [, '_'])[1]);
       return 'async function ' + name + '(' + ps.join(', ') + ') {';
-    })
-    .replace(/\bchar\s*\*?\s*([A-Za-z_]\w*)\s*\[[^\]]*\]\s*;/g, 'let $1 = "";')
-    .replace(/\bchar\s*\*?\s*([A-Za-z_]\w*)\s*\[[^\]]*\]\s*=/g, 'let $1 =')
-    .replace(new RegExp('\\b' + MOD + T + PTR + '([A-Za-z_]\\w*)\\s*\\[[^\\]]*\\]\\s*=\\s*\\{([^}]*)\\}', 'g'), 'let $1 = [$2]')
-    .replace(new RegExp('\\b' + MOD + T + PTR + '([A-Za-z_]\\w*)\\s*\\[([^\\]]+)\\]\\s*;', 'g'), 'let $1 = new Array($2).fill(0);')
-    .replace(/=\s*\{\s*0\s*\}/g, '= {}')
-    .replace(new RegExp('\\b' + MOD + T + '\\b' + PTR + '(?=[A-Za-z_])', 'g'), 'let ')
-    .replace(/([(,=!]\s*)&(?=[A-Za-z_])/g, '$1')
+    });
+
+  // 변수 선언 다시 쓰기 + 정수 변수 기록
+  const varType = {}, conflict = new Set();
+  const note = (n, f) => { if (n in varType && varType[n] !== f) conflict.add(n); varType[n] = f; };
+  {
+    const re = new RegExp('(?<![\\w.])' + MOD + '(' + T + ')\\b(' + PTR + ')(?=[A-Za-z_])', 'g');
+    let m, guard = 0;
+    while ((m = re.exec(code)) && guard++ < 5000) {
+      const t = m[1].replace(/\s+/g, ' '), ptr = m[2].includes('*');
+      const start = m.index, dStart = m.index + m[0].length, end = exprEndStmt(code, dStart);
+      const decls = splitTop(code.slice(dStart, end)).map(d => {
+        const dm = d.match(/^\s*([A-Za-z_]\w*)\s*((?:\[[^\]]*\])*)\s*(?:=\s*([\s\S]*))?$/);
+        if (!dm) return d;
+        const [, name, arr, init] = dm; const f = fnOf(t);
+        if (arr) {
+          const size = (arr.match(/\[([^\]]*)\]/) || [])[1];
+          if (init !== undefined) {
+            const v = init.trim();
+            if (v.startsWith('{')) return `${name} = [${v.slice(1, -1)}]`;
+            return `${name} = ${v}`;
+          }
+          if (t === 'char' || t === 'unsigned char' && false) return `${name} = ""`;
+          if (isStruct(t)) return `${name} = Array.from({ length: ${size || 0} }, () => ({}))`;
+          return `${name} = new Array(${size || 0}).fill(0)`;
+        }
+        if (ptr) { note(name, null); return init !== undefined ? `${name} = ${init}` : `${name} = ${t === 'char' ? '""' : 'null'}`; }
+        if (isStruct(t) || HANDLE_T.includes(t)) { note(name, null); if (init === undefined || /^\s*\{/.test(init)) return `${name} = {}`; return `${name} = __cp(${init})`; }
+        if (f) { note(name, f); return init !== undefined ? `${name} = ${f}(${init})` : `${name} = 0`; }
+        note(name, null); return init !== undefined ? `${name} = ${init}` : `${name} = 0`;
+      });
+      const rep = 'let ' + decls.join(', ');
+      code = code.slice(0, start) + rep + code.slice(end);
+      re.lastIndex = start + rep.length;
+    }
+  }
+  code = code
+    .replace(/([(,=!?:]\s*)&(?=[A-Za-z_])/g, '$1')
     .replace(/\b(sprintf|snprintf)\s*\(\s*([A-Za-z_]\w*)\s*,/g, '$2 = $1(');
+
+  // 정수 변수에 대입할 때 잘라내기
+  {
+    const names = Object.keys(varType).filter(n => varType[n] && !conflict.has(n));
+    if (names.length) {
+      const re = new RegExp('(?<![\\w.\\]])(' + names.join('|') + ')\\s*(\\+|-|\\*|\\/|%|<<|>>|&|\\||\\^)?=(?!=)', 'g');
+      let m, guard = 0;
+      while ((m = re.exec(code)) && guard++ < 20000) {
+        const before = code.slice(Math.max(0, m.index - 4), m.index);
+        if (/let\s$/.test(before)) continue;
+        const prev = code.slice(0, m.index).trimEnd().slice(-1);
+        if ('=!<>'.includes(prev) && prev) { /* 비교식 일부 */ }
+        const s = m.index + m[0].length, e = exprEnd(code, s);
+        const rhs = code.slice(s, e), f = varType[m[1]];
+        const rep = `${m[1]} = ${f}(${m[2] ? `${m[1]} ${m[2]} (${rhs})` : rhs})`;
+        code = code.slice(0, m.index) + rep + code.slice(e);
+        re.lastIndex = m.index + rep.length;
+      }
+    }
+  }
   code = insertTicks(code);
   code = code.replace(/(?<![\w$.])(?<!function\s+)(?<!new\s+)([A-Za-z_]\w*)\s*\(/g, (m, n) => KW.has(n) ? m : 'await ' + m);
   code = code.replace(/__L(\d+)__/g, (m, i) => lits[+i]);
   return { js: code };
+}
+// 선언문 끝: 깊이 0의 ; 또는 깊이 -1의 )
+function exprEndStmt(c, i) {
+  let d = 0;
+  for (; i < c.length; i++) {
+    const ch = c[i];
+    if ('([{'.includes(ch)) d++;
+    else if (')]}'.includes(ch)) { if (d === 0) return i; d--; }
+    else if (ch === ';' && d === 0) return i;
+  }
+  return i;
+}
+function splitTop(s) {
+  const r = []; let d = 0, last = 0;
+  for (let i = 0; i < s.length; i++) { const ch = s[i]; if ('([{'.includes(ch)) d++; else if (')]}'.includes(ch)) d--; else if (ch === ',' && d === 0) { r.push(s.slice(last, i)); last = i + 1; } }
+  r.push(s.slice(last)); return r;
 }
 
 function insertTicks(c) {
@@ -196,6 +343,7 @@ function createRuntime(hw) {
     }
   }
   const sched = setInterval(() => { if (st.stopped) return clearInterval(sched); service(); }, 1);
+  setTimeout(() => { if (st.stopped) return; for (const p in st.pins) if (st.pins[p].mode === 'reset' && st.pins[p].wrote) warn('nout' + p, `${p}에 값을 썼지만 출력 모드로 설정되지 않았어요. HAL_GPIO_Init에서 GPIO_MODE_OUTPUT_PP로 설정하세요.`); }, 1200);
 
   function rxPump() {
     if (st.rxIT && st.rxq.length >= st.rxIT.n) {
@@ -261,16 +409,16 @@ function createRuntime(hw) {
     HAL_GPIO_WritePin: (port, mask, v) => {
       if (!portOk(port, 'HAL_GPIO_WritePin')) return;
       for (const p of pinsOf(port, mask)) {
-        setPin(p, { out: v ? 1 : 0 });
-        if (st.pins[p].mode !== 'out') warn('nout' + p, `${p}가 출력 모드가 아니에요. HAL_GPIO_Init에서 GPIO_MODE_OUTPUT_PP로 설정하세요.`);
+        setPin(p, { out: v ? 1 : 0, wrote: true });
+        if (st.pins[p].mode !== 'out' && st.pins[p].mode !== 'reset') warn('nout' + p, `${p}가 출력 모드가 아니에요. HAL_GPIO_Init에서 GPIO_MODE_OUTPUT_PP로 설정하세요.`);
       }
       hw.onWrite && hw.onWrite();
     },
     HAL_GPIO_TogglePin: (port, mask) => {
       if (!portOk(port, 'HAL_GPIO_TogglePin')) return;
       for (const p of pinsOf(port, mask)) {
-        setPin(p, { out: st.pins[p]?.out ? 0 : 1 });
-        if (st.pins[p].mode !== 'out') warn('nout' + p, `${p}가 출력 모드가 아니에요. HAL_GPIO_Init에서 GPIO_MODE_OUTPUT_PP로 설정하세요.`);
+        setPin(p, { out: st.pins[p]?.out ? 0 : 1, wrote: true });
+        if (st.pins[p].mode !== 'out' && st.pins[p].mode !== 'reset') warn('nout' + p, `${p}가 출력 모드가 아니에요. HAL_GPIO_Init에서 GPIO_MODE_OUTPUT_PP로 설정하세요.`);
       }
       hw.onWrite && hw.onWrite();
     },
@@ -354,6 +502,10 @@ function createRuntime(hw) {
     sprintf: (fmt, ...a) => cfmt(fmt, a),
     snprintf: (n, fmt, ...a) => cfmt(fmt, a).slice(0, Math.max(0, n - 1)),
     strlen: s => toStr(s).length, strcmp: (a, b) => toStr(a) < toStr(b) ? -1 : toStr(a) > toStr(b) ? 1 : 0,
+    __s8: v => (Math.trunc(Number(v) || 0) << 24) >> 24, __u8: v => Math.trunc(Number(v) || 0) & 0xFF,
+    __s16: v => (Math.trunc(Number(v) || 0) << 16) >> 16, __u16: v => Math.trunc(Number(v) || 0) & 0xFFFF,
+    __s32: v => typeof v === 'number' && isFinite(v) ? Math.trunc(v) | 0 : typeof v === 'boolean' ? +v : (Number(v) | 0), __u32: v => Math.trunc(Number(v) || 0) >>> 0,
+    __b: v => v ? 1 : 0, __cp: v => (v && typeof v === 'object' && !Array.isArray(v)) ? { ...v } : v,
     sizeof: x => (typeof x === 'string' || Array.isArray(x)) ? Math.max(x.length, 1) : 1,
     abs: Math.abs, fabs: Math.abs, sqrt: Math.sqrt, pow: Math.pow, sin: Math.sin, cos: Math.cos, atan2: Math.atan2,
     fminf: Math.min, fmaxf: Math.max, round: Math.round, floor: Math.floor, ceil: Math.ceil, memset: () => 0,

@@ -512,12 +512,12 @@ export function createScene(host, cb) {
     if (!board.visible) { bb.makeEmpty(); for (const b of built.values()) bb.expandByObject(b.group); if (bb.isEmpty()) bb.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(40, 20, 40)); }
     bb.min.y = 0; bb.max.y = Math.min(bb.max.y, 45);
     const tgt = bb.getCenter(new THREE.Vector3()).setY(0);
-    const dir = name === 'top' ? new THREE.Vector3(0, 1, .02).normalize() : name === 'home' ? (camera.aspect < .9 ? new THREE.Vector3(-.78, .6, .32) : new THREE.Vector3(-.42, .72, .55)).normalize() : new THREE.Vector3(0, .78, .62).normalize();
+    const dir = name === 'top' ? new THREE.Vector3(0, 1, .02).normalize() : name === 'home' ? (camera.aspect < .9 ? new THREE.Vector3(-.78, .6, .32) : new THREE.Vector3(-.42, .72, .55)).normalize() : (camera.aspect < .9 ? new THREE.Vector3(-.66, .74, .08) : new THREE.Vector3(0, .78, .62)).normalize();
     const corners = []; for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) corners.push(new THREE.Vector3(x, y, z));
     const cam = camera.clone(); let d = 15;
     for (; d < 1200; d *= 1.06) {
       cam.position.copy(tgt).addScaledVector(dir, d); cam.lookAt(tgt); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
-      if (corners.every(c => { const v = c.clone().project(cam); return Math.abs(v.x) < (name === 'home' ? .62 : .9) && Math.abs(v.y) < (name === 'home' ? .72 : .86); })) break;
+      if (corners.every(c => { const v = c.clone().project(cam); return Math.abs(v.x) < (name === 'home' ? .62 : .9) && v.y < (name === 'home' ? .72 : .86) && v.y > (name === 'home' ? -.62 : -.6); })) break;
     }
     anim = { from: camera.position.clone(), to: tgt.clone().addScaledVector(dir, d), tf: orbit.target.clone(), tt: tgt, t: 0 };
   }

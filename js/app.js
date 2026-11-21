@@ -184,12 +184,13 @@ function beep() {
 const stage = $('#stage');
 const scene = createScene(stage, {
   onTerm: id => {
+    if (curView !== 'lesson') return;
     if (!pending) return setPending(id);
     if (pending === id) return setPending(null);
     if (!wires.some(([a, b]) => (a === pending && b === id) || (a === id && b === pending))) { wires.push([pending, id]); renderWires(); }
     setPending(null);
   },
-  onWire: i => { wires.splice(i, 1); renderWires(); },
+  onWire: i => { if (curView !== 'lesson') return; wires.splice(i, 1); renderWires(); },
   onEmpty: () => setPending(null),
   onHover: id => {
     if (!id) return;
@@ -212,10 +213,11 @@ const scene = createScene(stage, {
   onMove: (id, X, Z, end) => {
     const c = compOf(id); if (!c) return; c.X = X; c.Z = Z;
     if (!end) { scene.setWires(wires, wireColor); return; }
+    if (curView !== 'lesson') return;
     if (cur.sandbox) saveSandbox(); else (store.pos[cur.id] = store.pos[cur.id] || {})[c.id] = [X, Z];
     save();
   },
-  onDelete: id => removeComp(id),
+  onDelete: id => { if (curView === 'lesson') removeComp(id); },
   onHotspot: key => showHotspot(key)
 });
 document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => scene.view(b.dataset.view));
@@ -280,7 +282,7 @@ function updateWireStatus() {
 function setPending(id) { pending = id; scene.setPending(id); if (id) $('#info').innerHTML = `<b>${termName(id)}</b> 선택됨 · 연결할 다른 핀을 누르세요 (Esc 취소)`; }
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') setPending(null);
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && curView === 'lesson') { e.preventDefault(); run(); }
 });
 $('#clearBtn').onclick = () => { wires = []; renderWires(); };
 $('#hintBtn').onclick = () => {
@@ -496,7 +498,7 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => selectTab(t.dat
 const ta = $('#code'), gut = $('#gutter');
 function syncGutter() { const n = ta.value.split('\n').length; gut.textContent = Array.from({ length: n }, (_, i) => i + 1).join('\n'); gut.scrollTop = ta.scrollTop; }
 let saveT = 0;
-ta.addEventListener('input', () => { syncGutter(); clearTimeout(saveT); saveT = setTimeout(() => { store.code[cur.id] = ta.value; save(); }, 300); });
+ta.addEventListener('input', () => { syncGutter(); clearTimeout(saveT); const id = cur.id, v = ta.value; store.code[id] = v; saveT = setTimeout(save, 300); });
 ta.addEventListener('scroll', () => { gut.scrollTop = ta.scrollTop; });
 ta.addEventListener('keydown', e => {
   if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertText', false, '  '); }
