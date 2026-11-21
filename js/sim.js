@@ -172,8 +172,8 @@ function createRuntime(hw) {
   const raise = f => { if (st.q.length < 32) { st.q.push(f); drain(); } };
 
   const lastLv = {};
-  const sched = setInterval(() => {
-    if (st.stopped) return clearInterval(sched);
+  function service() {
+    if (st.stopped) return;
     const t = now();
     for (const h of TIMS) {
       if (!h.it) continue;
@@ -194,7 +194,8 @@ function createRuntime(hw) {
       }
       lastLv[p] = lv;
     }
-  }, 1);
+  }
+  const sched = setInterval(() => { if (st.stopped) return clearInterval(sched); service(); }, 1);
 
   function rxPump() {
     if (st.rxIT && st.rxq.length >= st.rxIT.n) {
@@ -240,14 +241,14 @@ function createRuntime(hw) {
   };
 
   Object.assign(api, {
-    __tick: async () => { check(); if (now() - lastYield > 2) { await yieldNow(); lastYield = now(); check(); } },
+    __tick: async () => { check(); if (now() - lastYield > 2) { service(); await yieldNow(); lastYield = now(); check(); } },
     __reg: o => { st.isr = o; },
     HAL_Init: () => 0, SystemClock_Config: () => 0, Error_Handler: () => { throw new Error('Error_Handler() 호출됨'); },
     HAL_GetTick: () => Math.floor(now() - st.t0),
     HAL_Delay: async ms => {
       check(); const end = now() + Math.max(0, Number(ms) || 0);
-      while (now() < end) { await new Promise(r => setTimeout(r, Math.min(20, Math.max(0, end - now())))); check(); }
-      lastYield = now();
+      while (now() < end) { service(); await new Promise(r => setTimeout(r, Math.min(20, Math.max(0, end - now())))); check(); }
+      service(); lastYield = now();
     },
     HAL_NVIC_SetPriority: () => 0, HAL_NVIC_EnableIRQ: n => { st.nvic[n] = true; }, HAL_NVIC_DisableIRQ: n => { st.nvic[n] = false; },
     __disable_irq: () => 0, __enable_irq: () => 0,

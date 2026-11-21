@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
 <body>
 <header class="top">
@@ -45,14 +46,9 @@
         <label for="partSel">부품</label><select id="partSel"></select><button class="btn" id="addPart">부품 추가</button>
         <span class="note">부품 몸체를 끌어 옮기고, × 로 삭제해요</span>
       </div>
-      <div class="stage">
-        <svg id="svg" viewBox="0 0 880 670" role="img" aria-label="NUCLEO-F401RE 보드와 부품 작업대">
-          <defs>
-            <radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".35" stop-color="currentColor" stop-opacity=".7"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient>
-          </defs>
-          <g id="gBoard"></g><g id="gComps"></g><g id="gWires"></g><g id="gTerms"></g>
-          <path id="rubber" class="rubber" d=""/>
-        </svg>
+      <div class="stage3d" id="stage">
+        <div class="views"><button class="vbtn" data-view="all">전체</button><button class="vbtn" data-view="top">위에서</button><button class="vbtn" data-view="board">보드 확대</button></div>
+        <div class="keys">드래그 회전 · 우클릭 드래그 이동 · 휠 확대 · W A S D 이동 · Q E 회전</div>
       </div>
       <div class="info" id="info">핀을 누른 뒤 연결할 다른 핀을 누르면 전선이 생겨요. 전선을 누르면 지워집니다.</div>
     </section>
@@ -95,6 +91,6 @@
 <script src="js/lessons.js"></script>
 <script src="js/parts.js"></script>
 <script src="js/sim.js"></script>
-<script src="js/app.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

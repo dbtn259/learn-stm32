@@ -1,4 +1,5 @@
-// STM32 실습실 UI: 보드/부품 렌더링, 배선, 실행, 레슨 진행
+// STM32 실습실 UI: 3D 작업대, 배선, 실행, 레슨 진행
+import { createScene, BOARD } from './scene3d.js';
 {
 const $ = s => document.querySelector(s);
 const LESSONS = window.LESSONS, PARTS = window.PARTS;
@@ -6,69 +7,31 @@ const { createRuntime, Stop } = window.STM;
 const now = () => performance.now();
 
 /* ---------- 저장소 ---------- */
-const KEY = 'stm32lab:v2';
+const KEY = 'stm32lab:v3';
 let store = { done: {}, code: {}, wires: {}, pos: {}, sandbox: null, sound: true };
-try { store = Object.assign(store, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+try {
+  const old = JSON.parse(localStorage.getItem('stm32lab:v2') || 'null');
+  if (old && !localStorage.getItem(KEY)) Object.assign(store, { done: old.done || {}, code: old.code || {}, sound: old.sound !== false });
+  store = Object.assign(store, JSON.parse(localStorage.getItem(KEY) || '{}'));
+} catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };
 
 /* ---------- 보드 핀 ---------- */
-const LX = 58, RX = 362;
-const BOARD_PINS = [
-  ['3V3', '3V3', LX, 180, 'pwr'], ['5V', '5V', LX, 206, 'pwr'], ['GND1', 'GND', LX, 232, 'gnd'], ['GND2', 'GND', LX, 258, 'gnd'], ['VIN', 'VIN', LX, 284, 'nc'],
-  ['PA0', 'A0', LX, 336], ['PA1', 'A1', LX, 362], ['PA4', 'A2', LX, 388], ['PB0', 'A3', LX, 414], ['PC1', 'A4', LX, 440], ['PC0', 'A5', LX, 466],
-  ['PB8', 'D15', RX, 180], ['PB9', 'D14', RX, 206], ['GND3', 'GND', RX, 232, 'gnd'], ['PA5', 'D13', RX, 258], ['PA6', 'D12', RX, 284], ['PA7', 'D11', RX, 310],
-  ['PB6', 'D10', RX, 336], ['PC7', 'D9', RX, 362], ['PA9', 'D8', RX, 388],
-  ['PA8', 'D7', RX, 440], ['PB10', 'D6', RX, 466], ['PB4', 'D5', RX, 492], ['PB5', 'D4', RX, 518], ['PB3', 'D3', RX, 544], ['PA10', 'D2', RX, 570], ['PA2', 'D1', RX, 596], ['PA3', 'D0', RX, 622]
-].map(([id, lab, x, y, kind]) => ({ id, lab, x, y, kind: kind || 'io' }));
+const BOARD_PINS = BOARD.filter(p => p.kind !== 'nc');
 const AF = {
   PA0: 'ADC1_IN0 · TIM2_CH1(엔코더 A)', PA1: 'ADC1_IN1 · TIM2_CH2(엔코더 B)', PA4: 'ADC1_IN4', PB0: 'ADC1_IN8 · TIM3_CH3', PC1: 'ADC1_IN11', PC0: 'ADC1_IN10',
   PB8: 'I2C1_SCL', PB9: 'I2C1_SDA', PA5: 'LD2 · SPI1_SCK', PA6: 'TIM3_CH1 · SPI1_MISO', PA7: 'TIM3_CH2 · SPI1_MOSI', PB6: 'TIM4_CH1 · I2C1_SCL',
   PC7: 'TIM3_CH2', PA9: 'TIM1_CH2 · USART1_TX', PA8: 'TIM1_CH1', PB10: 'TIM2_CH3 · I2C2_SCL', PB4: 'TIM3_CH1', PB5: 'TIM3_CH2',
   PB3: 'TIM2_CH2', PA10: 'USART1_RX', PA2: 'USART2_TX (가상 COM)', PA3: 'USART2_RX (가상 COM)',
-  '3V3': '3.3V 전원 출력', '5V': '5V 전원 출력 (USB)', GND1: '접지', GND2: '접지', GND3: '접지', VIN: '외부 전원 입력 7~12V'
+  '3V3': '3.3V 전원 출력', '5V': '5V 전원 출력 (USB)', GND1: '접지', GND2: '접지', GND3: '접지'
 };
-const BP = Object.fromEntries(BOARD_PINS.map(p => [p.id, p]));
-
-function drawBoard() {
-  let s = `<rect x="36" y="28" width="360" height="630" rx="10" fill="#000" opacity=".08"/>
-  <rect x="30" y="20" width="360" height="630" rx="10" fill="#fbfbf8" stroke="#c3cad0" stroke-width="1.5"/>
-  <rect x="31" y="21" width="358" height="118" rx="9" fill="#f0f1ed"/>
-  <rect x="180" y="6" width="60" height="34" rx="3" fill="#b9c0c6" stroke="#8a9299"/><rect x="190" y="12" width="40" height="10" rx="2" fill="#6f777e"/>
-  <rect x="268" y="56" width="40" height="40" rx="2" fill="#1b1d1f"/>
-  <text x="70" y="74" font-size="13" font-weight="700" fill="#6b7781" font-family="sans-serif">ST-LINK/V2-1</text>
-  <text x="70" y="92" font-size="11" fill="#8b959e" font-family="sans-serif">디버거 · 가상 COM</text>
-  <circle cx="140" cy="116" r="4" fill="#e0453a"/><text x="150" y="120" font-size="10" fill="#8b959e" font-family="sans-serif">LD1 COM</text>
-  <circle cx="330" cy="120" r="9" fill="url(#glow)" style="color:#ff3b30"/><circle cx="330" cy="120" r="4" fill="#ff3b30"/><text x="318" y="124" font-size="10" fill="#8b959e" text-anchor="end" font-family="sans-serif">LD3 PWR</text>
-  <line x1="30" y1="140" x2="390" y2="140" stroke="#b9c0c6" stroke-dasharray="3 5" stroke-width="2"/>
-  <text x="210" y="236" text-anchor="middle" font-size="15" font-weight="800" fill="#03234b" font-family="sans-serif">NUCLEO-F401RE</text>
-  <g>${Array.from({ length: 12 }, (_, i) => `<rect x="${166 + i * 8}" y="316" width="3" height="8" fill="#9aa3ab"/><rect x="${166 + i * 8}" y="432" width="3" height="8" fill="#9aa3ab"/><rect x="152" y="${330 + i * 8}" width="8" height="3" fill="#9aa3ab"/><rect x="260" y="${330 + i * 8}" width="8" height="3" fill="#9aa3ab"/>`).join('')}</g>
-  <rect x="160" y="324" width="100" height="108" rx="3" fill="#1b1d1f"/><circle cx="172" cy="336" r="3" fill="#3a3d40"/>
-  <text x="210" y="374" text-anchor="middle" font-size="14" font-weight="800" fill="#fff" font-family="sans-serif">STM32</text>
-  <text x="210" y="392" text-anchor="middle" font-size="10" fill="#bfc5ca" font-family="monospace">F401RET6</text>
-  <rect x="190" y="470" width="40" height="16" rx="7" fill="#c8ced3" stroke="#9aa3ab"/><text x="210" y="502" text-anchor="middle" font-size="10" fill="#8b959e" font-family="sans-serif">X3 8MHz</text>
-  <circle id="ld2glow" cx="243" cy="262" r="26" fill="url(#glow)" style="color:#22d160" opacity="0"/>
-  <rect id="ld2" x="236" y="257" width="14" height="10" rx="2" fill="#cfe8d4" stroke="#8fb59a"/>
-  <text x="243" y="284" text-anchor="middle" font-size="10" font-weight="700" fill="#6b7781" font-family="sans-serif">LD2</text>
-  <rect x="94" y="560" width="34" height="34" rx="3" fill="#d6dbdf" stroke="#aab2b9"/><circle id="b1cap" class="act" data-act="press" data-comp="B1" cx="111" cy="577" r="11" fill="#2f6ad0" stroke="#1d4a99" stroke-width="2"/>
-  <text x="111" y="612" text-anchor="middle" font-size="10" font-weight="700" fill="#6b7781" font-family="sans-serif">B1 USER</text>
-  <rect x="174" y="560" width="34" height="34" rx="3" fill="#d6dbdf" stroke="#aab2b9"/><circle id="b2cap" class="act" data-act="press" data-comp="B2" cx="191" cy="577" r="11" fill="#1b1d1f" stroke="#000" stroke-width="2"/>
-  <text x="191" y="612" text-anchor="middle" font-size="10" font-weight="700" fill="#6b7781" font-family="sans-serif">B2 RESET</text>`;
-  for (const [x, y1, y2] of [[LX, 166, 296], [LX, 322, 478], [RX, 166, 400], [RX, 426, 634]]) s += `<rect x="${x - 12}" y="${y1}" width="24" height="${y2 - y1}" rx="2" fill="#151719"/>`;
-  for (const p of BOARD_PINS) {
-    const port = p.kind === 'io' ? p.id : '';
-    s += p.x === LX
-      ? `<text class="plabel" x="${p.x + 18}" y="${p.y + 4}">${p.lab}${port ? ` <tspan class="m">${port}</tspan>` : ''}</text>`
-      : `<text class="plabel" x="${p.x - 18}" y="${p.y + 4}" text-anchor="end">${port ? `<tspan class="m">${port}</tspan> ` : ''}${p.lab}</text>`;
-  }
-  $('#gBoard').innerHTML = s;
-}
+const BP = Object.fromEntries(BOARD.map(p => [p.id, p]));
 
 /* ---------- 상태 ---------- */
 let cur = LESSONS[0], comps = [], wires = [], pending = null, nets = new Map(), members = new Map();
-let rt = null, running = false, stats = null, hintTimer = 0, b1 = false;
+let rt = null, running = false, stats = null, hintTimer = 0, b1 = false, b2 = false, ld2Lit = false;
 const cs = {}, ios = {};
-const TERMS = new Map();
-const dirOf = id => id.startsWith('B:') ? (BP[id.slice(2)].x === LX ? [-1, 0] : [1, 0]) : [0, 1];
+const TERMS = new Set();
 const compOf = id => comps.find(c => c.id === id);
 
 function termName(id) {
@@ -81,7 +44,7 @@ function termName(id) {
 function rebuildNets() {
   const parent = new Map();
   const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
-  for (const id of TERMS.keys()) parent.set(id, id);
+  for (const id of TERMS) parent.set(id, id);
   parent.set(find('B:GND1'), find('B:GND2')); parent.set(find('B:GND2'), find('B:GND3'));
   for (const [a, b] of wires) if (parent.has(a) && parent.has(b)) parent.set(find(a), find(b));
   nets = new Map(); members = new Map();
@@ -157,7 +120,10 @@ const hw = {
     }
     return 1700 + Math.random() * 800;
   },
-  onWrite() { const t = now(); updateMotors(); eachPart((c, P, s, io) => { if (P.onWrite) P.onWrite(c, s, io, t); }); },
+  onWrite() {
+    const t = now(); updateMotors(); eachPart((c, P, s, io) => { if (P.onWrite) P.onWrite(c, s, io, t); if (c.type === 'led') P.step(c, s, io, 0, t); });
+    const d2 = rt && rt.drive('PA5'); const on = !!d2 && d2.level > .5; if (on !== ld2Lit) { ld2Lit = on; edge('ld2', on, t); }
+  },
   onPwm: () => updateMotors(),
   encoder() {
     let r = null;
@@ -175,14 +141,7 @@ const hw = {
     eachPart((c, P, s, io) => { if (P.i2c === addr && io.powered() && sameNet(c.id + ':SDA', 'B:PB9') && sameNet(c.id + ':SCL', 'B:PB8')) ok = true; });
     return ok;
   },
-  oledShow(buf) {
-    const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64;
-    const g = cv.getContext('2d'); const img = g.createImageData(128, 64);
-    for (let i = 0; i < buf.length; i++) { const o = i * 4, on = buf[i]; img.data[o] = on ? 120 : 5; img.data[o + 1] = on ? 210 : 6; img.data[o + 2] = on ? 255 : 8; img.data[o + 3] = 255; }
-    g.putImageData(img, 0, 0); const url = cv.toDataURL();
-    eachPart((c, P, s) => { if (c.type === 'oled') s.url = url; });
-    if (stats) stats.oledFrames++;
-  },
+  oledShow(buf) { eachPart((c, P, s) => { if (c.type === 'oled') { s.buf = buf; s.ver++; } }); if (stats) stats.oledFrames++; },
   lcdShow(lines) { eachPart((c, P, s) => { if (c.type === 'lcd') s.lines = lines.slice(); }); if (stats) stats.lcdText = lines.join('|'); },
   dhtRead(p) {
     let r = null;
@@ -218,61 +177,78 @@ const paintSnd = () => { sndBtn.textContent = store.sound ? '소리 켬' : '소�
 sndBtn.onclick = () => { store.sound = !store.sound; save(); paintSnd(); if (store.sound) audioInit(); else silence(); };
 paintSnd();
 
-/* ---------- 렌더링 ---------- */
-function addTerm(id, x, y, label, isBoard) {
-  return `<g class="term" data-id="${id}"><circle class="hit" cx="${x}" cy="${y}" r="12"/>
-    <circle class="pad" cx="${x}" cy="${y}" r="${isBoard ? 6.5 : 7}" fill="${isBoard ? '#d6ad52' : '#c9d1d8'}" stroke="${isBoard ? '#6e5316' : '#4b5560'}" stroke-width="1.5"/>
-    ${label ? `<text class="tlabel" x="${x}" y="${y + 25}" text-anchor="middle">${label}</text>` : ''}</g>`;
-}
+/* ---------- 3D 작업대 ---------- */
+const stage = $('#stage');
+const scene = createScene(stage, {
+  onTerm: id => {
+    if (!pending) return setPending(id);
+    if (pending === id) return setPending(null);
+    if (!wires.some(([a, b]) => (a === pending && b === id) || (a === id && b === pending))) { wires.push([pending, id]); renderWires(); }
+    setPending(null);
+  },
+  onWire: i => { wires.splice(i, 1); renderWires(); },
+  onEmpty: () => setPending(null),
+  onHover: id => {
+    if (!id) return;
+    let txt = `<b>${termName(id)}</b>`;
+    if (id.startsWith('B:')) {
+      txt += ` · ${AF[id.slice(2)] || ''}`;
+      const s = rt && rt.st.pins[id.slice(2)];
+      if (s) txt += ` · ${({ out: '출력', in: '입력', an: '아날로그', af: '대체 기능', reset: '리셋', it_r: '인터럽트↑', it_f: '인터럽트↓', it_rf: '인터럽트↕' })[s.mode] || s.mode}${s.mode === 'out' ? (s.out ? ' HIGH' : ' LOW') : ''}`;
+    }
+    $('#info').innerHTML = txt;
+  },
+  onPress: (id, down) => {
+    if (id === 'B2') { b2 = down; if (down && rt) { serial('— RESET (B2) —\n', 'sys'); run(); } return; }
+    if (id === 'B1') b1 = down; else if (cs[id]) cs[id].pressed = down;
+    if (stats) { if (down) stats.presses++; stats.lastInput = now(); }
+  },
+  onAct: (id, dx, dy) => { const c = compOf(id); const P = c && PARTS[c.type]; if (P && P.act) P.act(cs[c.id], dx, dy); },
+  onMove: (id, X, Z, end) => {
+    const c = compOf(id); if (!c) return; c.X = X; c.Z = Z;
+    if (!end) { scene.setWires(wires, wireColor); return; }
+    if (cur.sandbox) saveSandbox(); else (store.pos[cur.id] = store.pos[cur.id] || {})[c.id] = [X, Z];
+    save();
+  },
+  onDelete: id => removeComp(id)
+});
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => scene.view(b.dataset.view));
+window.__lab = { scene };
+
 function lessonComps(l) {
   if (l.sandbox) return (store.sandbox || []).map(c => ({ ...c }));
   const pos = store.pos[l.id] || {};
-  return l.comps.map(c => ({ ...c, name: c.name || PARTS[c.type].label, x: pos[c.id] ? pos[c.id][0] : c.x, y: pos[c.id] ? pos[c.id][1] : c.y }));
+  return l.comps.map(c => {
+    const P = PARTS[c.type];
+    const X = (c.x - 410) * .2 + 45 + P.w / 2, Z = (c.y - 300) * .2 + P.d / 2;
+    return { ...c, name: c.name || P.label, X: pos[c.id] ? pos[c.id][0] : X, Z: pos[c.id] ? pos[c.id][1] : Z };
+  });
 }
 function renderLesson() {
-  TERMS.clear();
   comps = lessonComps(cur);
-  let terms = '';
-  for (const p of BOARD_PINS) { TERMS.set('B:' + p.id, { x: p.x, y: p.y }); terms += addTerm('B:' + p.id, p.x, p.y, '', true); }
-  let html = '';
+  TERMS.clear();
+  for (const p of BOARD_PINS) TERMS.add('B:' + p.id);
   for (const c of comps) {
     const P = PARTS[c.type];
     if (!cs[c.id] || cs[c.id].__t !== c.type) cs[c.id] = Object.assign(P.init(), { __t: c.type });
     ios[c.id] = makeIo(c);
-    const lab = `<text class="clabel" x="${P.w / 2}" y="-12" text-anchor="middle">${c.name}</text>`;
-    const del = cur.sandbox ? `<g class="del" data-del="${c.id}"><circle cx="${P.w + 6}" cy="-16" r="11" fill="var(--panel)" stroke="var(--line)"/><path d="M${P.w + 1} -21l10 10m0-10l-10 10" stroke="var(--muted)" stroke-width="2"/></g>` : '';
-    html += `<g data-cg="${c.id}" transform="translate(${c.x},${c.y})">${lab}${P.draw(c)}${del}</g>`;
-    terms += `<g data-tg="${c.id}" transform="translate(${c.x},${c.y})">` + P.terms.map(([t, dx, dy]) => {
-      TERMS.set(`${c.id}:${t}`, { x: c.x + dx, y: c.y + dy });
-      return addTerm(`${c.id}:${t}`, dx, dy, t === '-' ? '−' : t);
-    }).join('') + '</g>';
+    for (const [t] of P.terms) TERMS.add(`${c.id}:${t}`);
   }
-  $('#gComps').innerHTML = html;
-  $('#gTerms').innerHTML = terms;
+  scene.setComps(comps, !!cur.sandbox);
   wires = (store.wires[cur.id] || []).filter(([a, b]) => TERMS.has(a) && TERMS.has(b));
-  fitView();
   renderWires(true);
 }
-function fitView() {
-  let w = 880, h = 670;
-  for (const c of comps) { const P = PARTS[c.type]; w = Math.max(w, c.x + P.w + 40); h = Math.max(h, c.y + P.h + 30); }
-  svg.setAttribute('viewBox', `0 0 ${Math.ceil(w)} ${Math.ceil(h)}`);
-}
-const WCOL = ['#f0a202', '#1d7fd6', '#16a34a', '#e4572e', '#0f9fb5', '#c2417a', '#7a5c2e'];
-function wirePath(a, b) {
-  const A = TERMS.get(a), B = TERMS.get(b), da = dirOf(a), db = dirOf(b);
-  const k = Math.min(140, Math.max(50, Math.hypot(A.x - B.x, A.y - B.y) * .35));
-  return `M${A.x} ${A.y}C${A.x + da[0] * k} ${A.y + da[1] * k} ${B.x + db[0] * k} ${B.y + db[1] * k} ${B.x} ${B.y}`;
+const WCOL = ['#f0a202', '#1d7fd6', '#16a34a', '#e4572e', '#0f9fb5', '#c2417a', '#8e6c3a', '#f2f2f2'];
+function wireColor(a, b, i) {
+  const ends = a + ' ' + b;
+  if (/B:GND/.test(ends)) return '#1b1c1e';
+  if (/B:3V3|B:5V/.test(ends)) return '#d6332a';
+  let k = 0; for (let j = 0; j < i; j++) { const e = wires[j][0] + ' ' + wires[j][1]; if (!/B:GND|B:3V3|B:5V/.test(e)) k++; }
+  return WCOL[k % WCOL.length];
 }
 function renderWires(noSave) {
   rebuildNets();
-  let ci = 0;
-  $('#gWires').innerHTML = wires.map(([a, b], i) => {
-    const ends = a + ' ' + b;
-    const col = /B:GND/.test(ends) ? 'var(--wire-gnd)' : /B:3V3|B:5V/.test(ends) ? '#d6332a' : WCOL[ci++ % WCOL.length];
-    const d = wirePath(a, b);
-    return `<path class="wirehit" data-i="${i}" d="${d}"/><path class="wire" d="${d}" stroke="${col}"/>`;
-  }).join('');
+  scene.setWires(wires, wireColor);
   if (!noSave) { store.wires[cur.id] = wires; save(); }
   updateWireStatus();
 }
@@ -295,46 +271,7 @@ function updateWireStatus() {
   if (short) sysWarn('short' + wires.length, '전원(3V3/5V)과 GND, 또는 3V3와 5V가 바로 연결됐어요. 실제로는 단락이라 위험합니다.');
   renderPinTab();
 }
-
-/* ---------- 배선·부품 상호작용 ---------- */
-const svg = $('#svg');
-function svgPt(e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
-function setPending(id) {
-  document.querySelectorAll('.term.sel').forEach(t => t.classList.remove('sel'));
-  pending = id;
-  if (id) svg.querySelector(`.term[data-id="${CSS.escape(id)}"]`).classList.add('sel');
-  else $('#rubber').setAttribute('d', '');
-}
-let moved = false;
-svg.addEventListener('click', e => {
-  if (moved) { moved = false; return; }
-  const del = e.target.closest('.del');
-  if (del) { removeComp(del.dataset.del); return; }
-  const t = e.target.closest('.term');
-  if (t) {
-    const id = t.dataset.id;
-    if (!pending) return setPending(id);
-    if (pending === id) return setPending(null);
-    if (!wires.some(([a, b]) => (a === pending && b === id) || (a === id && b === pending))) { wires.push([pending, id]); renderWires(); }
-    return setPending(null);
-  }
-  const w = e.target.closest('.wirehit');
-  if (w) { wires.splice(+w.dataset.i, 1); renderWires(); return; }
-  if (!e.target.closest('.act')) setPending(null);
-});
-svg.addEventListener('pointermove', e => {
-  const t = e.target.closest('.term');
-  if (t) {
-    const id = t.dataset.id; let txt = `<b>${termName(id)}</b>`;
-    if (id.startsWith('B:')) {
-      txt += ` · ${AF[id.slice(2)] || ''}`;
-      const s = rt && rt.st.pins[id.slice(2)];
-      if (s) txt += ` · ${({ out: '출력', in: '입력', an: '아날로그', af: '대체 기능', reset: '리셋', it_r: '인터럽트↑', it_f: '인터럽트↓', it_rf: '인터럽트↕' })[s.mode] || s.mode}${s.mode === 'out' ? (s.out ? ' HIGH' : ' LOW') : ''}`;
-    }
-    $('#info').innerHTML = txt;
-  }
-  if (pending) { const A = TERMS.get(pending), p = svgPt(e); $('#rubber').setAttribute('d', `M${A.x} ${A.y}L${p.x} ${p.y}`); }
-});
+function setPending(id) { pending = id; scene.setPending(id); if (id) $('#info').innerHTML = `<b>${termName(id)}</b> 선택됨 · 연결할 다른 핀을 누르세요 (Esc 취소)`; }
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') setPending(null);
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
@@ -342,77 +279,23 @@ document.addEventListener('keydown', e => {
 $('#clearBtn').onclick = () => { wires = []; renderWires(); };
 $('#hintBtn').onclick = () => {
   const { missing } = wireCheck();
-  document.querySelectorAll('.term.hint').forEach(t => t.classList.remove('hint'));
   if (!missing.length) return toast('배선이 모두 맞아요');
   const [a, b] = missing[0];
-  for (const id of [a, b]) svg.querySelector(`.term[data-id="${CSS.escape(id)}"]`)?.classList.add('hint');
+  scene.highlight([a, b]);
   $('#info').innerHTML = `다음 연결: <b>${termName(a)}</b> ↔ <b>${termName(b)}</b>`;
-  clearTimeout(hintTimer); hintTimer = setTimeout(() => document.querySelectorAll('.term.hint').forEach(t => t.classList.remove('hint')), 3000);
+  clearTimeout(hintTimer); hintTimer = setTimeout(() => scene.highlight([]), 3500);
 };
-
-let drag = null;
-svg.addEventListener('pointerdown', e => {
-  const act = e.target.closest('.act');
-  if (act) {
-    const id = act.dataset.comp, kind = act.dataset.act; e.preventDefault(); svg.setPointerCapture(e.pointerId);
-    if (kind === 'press') {
-      if (id === 'B2') { act.setAttribute('r', 9); if (rt) { serial('— RESET (B2) —\n', 'sys'); run(); } drag = { press: 'B2' }; return; }
-      if (id === 'B1') b1 = true; else cs[id].pressed = true;
-      if (stats) { stats.presses++; stats.lastInput = now(); }
-      drag = { press: id }; return;
-    }
-    drag = { act: id, x: e.clientX, y: e.clientY }; return;
-  }
-  const body = e.target.closest('.body'), g = e.target.closest('[data-cg]');
-  if (body && g) { svg.setPointerCapture(e.pointerId); const c = compOf(g.dataset.cg); const p = svgPt(e); drag = { move: c, dx: p.x - c.x, dy: p.y - c.y, sx: e.clientX, sy: e.clientY }; moved = false; }
-});
-const release = () => {
-  if (drag && drag.press) {
-    if (drag.press === 'B1') b1 = false; else if (drag.press === 'B2') $('#b2cap').setAttribute('r', 11); else if (cs[drag.press]) cs[drag.press].pressed = false;
-    if (stats) stats.lastInput = now();
-  }
-  if (drag && drag.move && moved) {
-    const c = drag.move;
-    if (cur.sandbox) store.sandbox = comps.map(({ id, type, name, color, x, y }) => ({ id, type, name, color, x, y }));
-    else (store.pos[cur.id] = store.pos[cur.id] || {})[c.id] = [c.x, c.y];
-    save(); fitView();
-  }
-  drag = null;
-};
-svg.addEventListener('pointerup', release); svg.addEventListener('pointercancel', release);
-svg.addEventListener('pointermove', e => {
-  if (!drag) return;
-  if (drag.act) {
-    const c = compOf(drag.act); const P = c && PARTS[c.type];
-    if (P && P.act) P.act(cs[c.id], e.clientX - drag.x, e.clientY - drag.y);
-    drag.x = e.clientX; drag.y = e.clientY;
-  } else if (drag.move) {
-    if (!moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
-    moved = true;
-    const c = drag.move, p = svgPt(e), P = PARTS[c.type];
-    c.x = Math.round(Math.max(410, p.x - drag.dx)); c.y = Math.round(Math.max(30, p.y - drag.dy));
-    svg.querySelector(`[data-cg="${c.id}"]`).setAttribute('transform', `translate(${c.x},${c.y})`);
-    svg.querySelector(`[data-tg="${c.id}"]`).setAttribute('transform', `translate(${c.x},${c.y})`);
-    for (const [t, dx, dy] of P.terms) TERMS.set(`${c.id}:${t}`, { x: c.x + dx, y: c.y + dy });
-    renderWires(true);
-  }
-});
-svg.addEventListener('wheel', e => {
-  const k = e.target.closest('.act'); if (!k || k.dataset.act === 'press') return;
-  const c = compOf(k.dataset.comp); if (!c || !PARTS[c.type].act) return;
-  e.preventDefault(); PARTS[c.type].act(cs[c.id], -e.deltaY / 6, 0);
-}, { passive: false });
 
 /* ---------- 자유 실습 ---------- */
 const pal = $('#partSel');
 pal.innerHTML = Object.entries(PARTS).map(([k, P]) => `<option value="${k}">${P.label}</option>`).join('');
-const saveSandbox = () => { store.sandbox = comps.map(({ id, type, name, color, x, y }) => ({ id, type, name, color, x, y })); save(); };
+const saveSandbox = () => { store.sandbox = comps.map(({ id, type, name, color, X, Z }) => ({ id, type, name, color, X, Z })); save(); };
 $('#addPart').onclick = () => {
   const type = pal.value, P = PARTS[type];
   let n = 1; while (comps.some(c => c.id === type + n)) n++;
-  const id = type + n;
-  comps.push({ id, type, name: `${P.label} ${n}`, color: type === 'led' ? ['red', 'green', 'yellow', 'blue', 'white'][(n - 1) % 5] : undefined, x: 440 + (comps.length % 3) * 170, y: 60 + Math.floor(comps.length / 3) * 200 });
-  saveSandbox(); stop(true); renderLesson(); toast(`${P.label} 추가 — 코드에서는 배선한 핀으로 제어하세요`);
+  const id = type + n, k = comps.length;
+  comps.push({ id, type, name: `${P.label} ${n}`, color: type === 'led' ? ['red', 'green', 'yellow', 'blue', 'white'][(n - 1) % 5] : undefined, X: 60 + (k % 3) * 70 + P.w / 2, Z: -40 + Math.floor(k / 3) * 60 });
+  saveSandbox(); stop(true); renderLesson(); scene.view('all'); toast(`${P.label} 추가 — 몸체를 끌어 옮길 수 있어요`);
 };
 function removeComp(id) {
   comps = comps.filter(c => c.id !== id); saveSandbox();
@@ -494,7 +377,7 @@ function friendly(e) {
 async function run() {
   stop(true); audioInit();
   stats = newStats(); sysWarned.clear(); lineBuf = '';
-  eachPart((c, P, s) => { if ('lit' in s) s.lit = false; if (c.type === 'oled') s.url = ''; if (c.type === 'lcd') s.lines = ['', '']; if (c.type === 'stepper') s.idx = -1; if (c.type === 'dcmotor') s.lt = now(); });
+  eachPart((c, P, s) => { if ('lit' in s) s.lit = false; if (c.type === 'oled') { s.buf = null; s.ver++; } if (c.type === 'lcd') s.lines = ['', '']; if (c.type === 'stepper') s.idx = -1; if (c.type === 'dcmotor') s.lt = now(); });
   serial(`▶ ${cur.title} 실행\n`, 'sys');
   if (cur.plot) showView('plot');
   const me = createRuntime(hw); rt = me;
@@ -518,7 +401,7 @@ function stop(silent) {
 $('#runBtn').onclick = run; $('#runBtn2').onclick = run; $('#stopBtn').onclick = () => stop();
 
 /* ---------- 프레임 루프 ---------- */
-let lastT = now(), ld2Lit = false;
+let lastT = now();
 function edge(key, on, t) {
   if (!stats || !running) return;
   if (key === 'ld2') stats.ld2Edges++; else stats.ledEdges[key] = (stats.ledEdges[key] || 0) + 1;
@@ -527,18 +410,9 @@ function edge(key, on, t) {
 function frame(t) {
   const dt = Math.min(.1, (t - lastT) / 1000); lastT = t;
   const d2 = rt && rt.drive('PA5'); const l2 = d2 ? d2.level : 0;
-  $('#ld2glow').setAttribute('opacity', l2.toFixed(2));
-  $('#ld2').setAttribute('fill', l2 > .05 ? '#5df08a' : '#cfe8d4');
   if ((l2 > .5) !== ld2Lit) { ld2Lit = l2 > .5; edge('ld2', ld2Lit, t); }
-  $('#b1cap').setAttribute('r', b1 ? 9 : 11);
-  eachPart((c, P, s, io) => { try { P.frame && P.frame(c, s, io, dt, t); } catch (e) { console.error(e); } });
-  for (const p of BOARD_PINS) {
-    if (p.kind !== 'io') continue;
-    const d = rt && rt.drive(p.id);
-    const pad = svg.querySelector(`.term[data-id="B:${p.id}"] .pad`);
-    const v = d ? d.level : 0;
-    pad.setAttribute('fill', v > 0 ? `color-mix(in srgb, #ffe04a ${Math.round(40 + 60 * v)}%, #d6ad52)` : '#d6ad52');
-  }
+  eachPart((c, P, s, io) => { try { P.step(c, s, io, dt, t); } catch (e) { console.error(e); } });
+  scene.render({ ld2: l2, b1, b2, parts: cs });
   drawPlot();
   if (running && stats && !cur.sandbox && !store.done[cur.id]) {
     const wc = wireCheck();
@@ -642,14 +516,13 @@ function openLesson(id) {
   $('#palette').hidden = !l.sandbox;
   ta.value = store.code[l.id] || l.code; syncGutter();
   renderLesson(); renderList(); renderGoal(); renderSpec();
-  $('#info').innerHTML = l.sandbox ? '부품을 추가하고 원하는 대로 배선해보세요. 부품 몸체를 끌면 옮겨져요.' : l.wiring.length ? '핀을 누른 뒤 연결할 다른 핀을 누르면 전선이 생겨요. 전선을 누르면 지워지고, 부품 몸체를 끌면 옮겨져요.' : '이 레슨은 배선 없이 보드 내장 LED·버튼을 씁니다. 실행을 눌러보세요.';
+  $('#info').innerHTML = l.sandbox ? '부품을 추가하고 원하는 대로 배선해보세요. 부품 몸체를 끌면 옮겨져요.' : l.wiring.length ? '핀(금색 단자)을 누른 뒤 연결할 다른 핀을 누르면 점퍼선이 꽂혀요. 선을 누르면 뽑히고, 부품 몸체를 끌면 옮겨져요.' : '이 레슨은 배선 없이 보드 내장 LED·버튼을 씁니다. 실행을 눌러보세요.';
   document.title = `${l.title} · STM32 실습실`;
-  series.clear(); plotDirty = true; showView('mon');
+  series.clear(); plotDirty = true; showView('mon'); scene.view('all');
   const cb = document.querySelector('#lessonList [aria-current=true]'); if (cb) cb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 window.addEventListener('hashchange', () => openLesson(location.hash.slice(1)));
 
-drawBoard();
 openLesson(location.hash.slice(1));
 requestAnimationFrame(frame);
 }
